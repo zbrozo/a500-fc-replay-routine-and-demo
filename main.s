@@ -10,6 +10,7 @@ DEF_COUNTERS = 1
 	include FC1.4replay.S
 	
 main:
+
 	bsr	Init
 
 	lea	module,a0
@@ -21,11 +22,8 @@ main:
 	move.w	#$c020,$dff09a
 .l:
 
-	bsr	WaitVBlank	
-	
 *	move.w	#$100,d0
 *	bsr	WaitRaster
-
 *	move.w	#$f00,$dff180
 *	jsr	PLAY_MUSIC	
 *	move.w	#0,$dff180
