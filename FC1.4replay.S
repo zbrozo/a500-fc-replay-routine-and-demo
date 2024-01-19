@@ -150,11 +150,11 @@ PLAY:
         bne.s music_on
         rts
 music_on:
+        moveq #0,d5
+        moveq #6,d6
         subq.w #1,4(a5)			;Decrease replayspeed counter
         bne.s nonewnote
         move.w 6(a5),4(a5)		;Restore replayspeed counter
-        moveq #0,d5
-        moveq #6,d6
         lea V1data(pc),a0		;Point to voice1 data area
         bsr new_note
         lea V2data(pc),a0		;Point to voice2 data area
