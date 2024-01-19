@@ -4,27 +4,6 @@
 
 ;Doesn't work with V1.0 - V1.3 modules !!
 
-	incdir	ZPRJ:fc/
-
-	section fc,code_c
-	
- 	move.l $4,a6		;This little routine
- 	jsr -132(a6)		;is only for test purposes
- 	lea	music,a0
- 	bsr.L init_music	;(Raster time measuring)
-ploop:			;and is not needed by the
- 	move.w #0,$dff180	;replay routine!
- 	cmpi.b #$80,$dff006
- 	bne.s ploop		;The results i got from the
- 	move.w #8,$dff180	;test, is a use of approximatly
- 	bsr play		;15-20 raster lines
- 	btst #6,$bfe001		;which means that you need to
- 	bne.s ploop		;allocate 20 RASTER LINES
- 	bsr.w end_music		;------------------------
- 	move.l $4,a6
- 	jmp -138(a6)
-
-	
 END_MUSIC:
         clr.w onoff
         clr.l $dff0a6
@@ -38,7 +17,6 @@ END_MUSIC:
 INIT_MUSIC:
         move.w #1,onoff
         bset #1,$bfe001
-        ;;        lea MODULE,a0
         lea 180(a0),a1
         move.l a1,SEQpoint
         move.l a0,a1
@@ -689,4 +667,3 @@ SOUNDINFO:
         blk.b 10*16,0	;Reserved for samples
         blk.b 80*16,0	;Reserved for waveforms
 
-music:	incbin	ice2
