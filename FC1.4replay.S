@@ -2,9 +2,6 @@
 **  Amiga FUTURE COMPOSER  »» V1.4 ««  Replay routine  **
 *********************************************************
 
-*        xref INIT_MUSIC,PLAY_MUSIC,END_MUSIC
-*        section fc,code_c
-	
 ;Doesn't work with V1.0 - V1.3 modules !!
 
 ;; 	move.l $4,a6		;This little routine
@@ -22,6 +19,7 @@
 ;; 	bsr.w end_music		;------------------------
 ;; 	move.l $4,a6
 ;; 	jmp -138(a6)
+
 FC_SAMPLES_NR		= 10
 FC_WAVEFORMS_NR		= 80	
 	
@@ -47,13 +45,13 @@ FC_VOICE_VolumeTime	= 15		; byte
 FC_VOICE_VolumePos	= 16		; word
 FC_VOICE_FreqPtr	= 18		; long
 FC_VOICE_SoundTranspose	= 22		; byte - instrument change
-FC_VOICE_ExecSpeed 	= 23		; byte
-FC_VOICE_ExecSpeed2 	= 24		; byte
+FC_VOICE_ExecSpeedTmp 	= 23		; byte	- for calculation
+FC_VOICE_ExecSpeed 	= 24		; byte
 FC_VOICE_SustainVolume	= 25		; byte
 FC_VOICE_SustainTime	= 26		; byte
 FC_VOICE_VibratoSpeed   = 27		; byte
 FC_VOICE_VibratoAmp	= 28		; byte
-FC_VOICE_VibratoAmp2	= 29		; byte
+FC_VOICE_VibratoAmpTmp	= 29		; byte - temporary value for calculation
 FC_VOICE_VibratoDelay	= 30		; byte
 FC_VOICE_ChannelBitMask	= 32		; word
 FC_VOICE_PatternPtr	= 34		; long
@@ -73,7 +71,7 @@ FC_VOICE_DMABase 	= 60		; long
 FC_VOICE_RepeatStart 	= 64		; word
 FC_VOICE_RepeatLength 	= 66		; word
 FC_VOICE_SamplePtr 	= 68		; long
-FC_VOICE_CommandCounter = 72		; word
+FC_VOICE_SetRepeatStartAndLength = 72	; word
 FC_VOICE_SIZE		= 74
 
 FC_SEQ_SPEED		= 12		; offset to speed in sequence
@@ -316,11 +314,16 @@ FC_PLAY:
         move.w 	FC_VOICE_RepeatLength+(2*FC_VOICE_SIZE)(a0),d3
         move.w 	FC_VOICE_RepeatLength+(3*FC_VOICE_SIZE)(a0),d4
 
+	;; Turn on channels
+        move.w	(a5),d7			; Bitmask
+        ori.w	#$8000,d7		; Set/clr bit = 1
+        move.w	d7,$96(a6)		; Enable audio DMA
+
+	;; Set repeat start and length of the sample in the channel
         moveq 	#2,d0
         moveq	#0,d5
-	
 .chan1:
-        lea	(V1data+FC_VOICE_CommandCounter)(pc),a0
+	lea	(FC_VoicesInfo+FC_VOICE_SetRepeatStartAndLength)(pc),a0
         move.w	(a0),d7
         beq.s	.chan2
         subq.w	#1,(a0)
@@ -330,7 +333,7 @@ FC_PLAY:
         move.l	a1,$a0(a6)		;Set samplestart
         move.w	d1,$a4(a6)		;Set samplelength
 .chan2:
-        lea	(V2data+FC_VOICE_CommandCounter)(pc),a0
+        lea	FC_VOICE_SIZE(a0),a0
         move.w	(a0),d7
         beq.s	.chan3
         subq.w	#1,(a0)
@@ -340,7 +343,7 @@ FC_PLAY:
         move.l	a2,$b0(a6)
         move.w	d2,$b4(a6)
 .chan3:
-        lea	(V3data+FC_VOICE_CommandCounter)(pc),a0
+        lea	FC_VOICE_SIZE(a0),a0
         move.w	(a0),d7
         beq.s	.chan4
         subq.w	#1,(a0)
@@ -350,7 +353,7 @@ FC_PLAY:
         move.l	a3,$c0(a6)
         move.w	d3,$c4(a6)
 .chan4:
-        lea	(V4data+FC_VOICE_CommandCounter)(pc),a0
+        lea	FC_VOICE_SIZE(a0),a0
         move.w	(a0),d7
         beq.s	.endplay
         subq.w	#1,(a0)
@@ -361,11 +364,6 @@ FC_PLAY:
         move.w	d4,$d4(a6)
 .endplay:
 
-	;; turn on voices
-        move.w	(a5),d7			; DMACON
-        ori.w	#$8000,d7		; Set/clr bit = 1
-        move.w	d7,$96(a6)		; Enable audio DMA
-	
 	rts
 	
 ;;; ----------------------------------
@@ -440,15 +438,15 @@ FC_NewNote:
         adda.w	d1,a2				; instrument table address
 	
         move.w	d5,FC_VOICE_VolumePos(a0)
-        move.b	(a2),FC_VOICE_ExecSpeed(a0)
-        move.b	(a2)+,FC_VOICE_ExecSpeed2(a0)
+        move.b	(a2),FC_VOICE_ExecSpeedTmp(a0)
+        move.b	(a2)+,FC_VOICE_ExecSpeed(a0)
 	
         moveq	#0,d1
         move.b	(a2)+,d1			; Frequency table number
         move.b	(a2)+,FC_VOICE_VibratoSpeed(a0)
         move.b	#$40,FC_VOICE_VibratoState(a0)	
         move.b	(a2),FC_VOICE_VibratoAmp(a0)
-        move.b	(a2)+,FC_VOICE_VibratoAmp2(a0)
+        move.b	(a2)+,FC_VOICE_VibratoAmpTmp(a0)
         move.b	(a2)+,FC_VOICE_VibratoDelay(a0)
         move.l	a2,FC_VOICE_VolumePtr(a0)
 	
@@ -510,14 +508,14 @@ FC_Effects:
 	
         move.l	FC_VOICE_DMABase(a0),a3
         move.l	(a4)+,d1
-        move.l	d1,(a3)		; sample start
+        move.l	d1,(a3)				; sample start
         move.l	d1,FC_VOICE_SamplePtr(a0)
-        move.w	(a4)+,4(a3)	; sample length
-        move.l	(a4),FC_VOICE_RepeatStart(a0)
-        move.w	#$0003,FC_VOICE_CommandCounter(a0)
+        move.w	(a4)+,4(a3)			; sample length
+        move.l	(a4),FC_VOICE_RepeatStart(a0) 	; save repeat start and length
+        move.w	#$0003,FC_VOICE_SetRepeatStartAndLength(a0)
 
 	move.w	d7,FC_VOICE_VolumePos(a0)
-        move.b	#$01,FC_VOICE_ExecSpeed(a0)
+        move.b	#1,FC_VOICE_ExecSpeedTmp(a0)
 
 	addq.w	#2,FC_VOICE_FreqPos(a0)
         bra	.transpose
@@ -534,11 +532,11 @@ FC_Effects:
 	
         move.l	FC_VOICE_DMABase(a0),a3
         move.l	(a4)+,d1
-        move.l	d1,(a3)		; sample start
+        move.l	d1,(a3)				; sample start
         move.l	d1,FC_VOICE_SamplePtr(a0)
-        move.w	(a4)+,4(a3)	; sample length
-        move.l	(a4),FC_VOICE_RepeatStart(a0)
-        move.w	#$0003,FC_VOICE_CommandCounter(a0)
+        move.w	(a4)+,4(a3)			; sample length
+        move.l	(a4),FC_VOICE_RepeatStart(a0)	; save repeat start and length
+        move.w	#$0003,FC_VOICE_SetRepeatStartAndLength(a0)
 	
         addq.w	#2,FC_VOICE_FreqPos(a0)
         bra	.transpose
@@ -575,8 +573,8 @@ FC_Effects:
         move.l	a4,FC_VOICE_SamplePtr(a0)
         move.l	6(a2),FC_VOICE_RepeatStart(a0)
         move.w	d7,FC_VOICE_VolumePos(a0)
-        move.b	#1,FC_VOICE_ExecSpeed(a0)
-        move.w	#3,FC_VOICE_CommandCounter(a0)
+        move.b	#1,FC_VOICE_ExecSpeedTmp(a0)
+        move.w	#3,FC_VOICE_SetRepeatStartAndLength(a0)
 .nossmp:
         addq.w	#3,FC_VOICE_FreqPos(a0)
         bra.s	.transpose
@@ -637,9 +635,10 @@ FC_VOLUfx:
 .volsustzero:
         tst.b	FC_VOICE_VolumeTime(a0)
         bne.s	.do_VOLbend
-        subq.b	#1,FC_VOICE_ExecSpeed(a0)
+	
+        subq.b	#1,FC_VOICE_ExecSpeedTmp(a0)
         bne.s	.calcperiod
-        move.b	FC_VOICE_ExecSpeed2(a0),FC_VOICE_ExecSpeed(a0)
+        move.b	FC_VOICE_ExecSpeed(a0),FC_VOICE_ExecSpeedTmp(a0)
 
 .volu_cmd:
         move.l	FC_VOICE_VolumePtr(a0),a1
@@ -649,6 +648,7 @@ FC_VOLUfx:
 *testvoluend:			
         cmpi.b	#$e1,d0
         beq.s	.calcperiod
+	
         cmpi.b	#$ea,d0
         bne.s	.testVOLsustain
         move.b	1(a1),FC_VOICE_VolumeStep(a0)
@@ -686,15 +686,17 @@ FC_VOLUfx:
 .calcperiod:
         move.b	FC_VOICE_FreqTranspose(a0),d0
         bmi.s	.lockednote
+
         add.b	FC_VOICE_Note(a0),d0
         add.b	FC_VOICE_Transpose(a0),d0
 .lockednote:
         moveq	#$7f,d1
         and.l	d1,d0
         lea	FC_PERIODS(pc),a1
-        add.w	d0,d0
+	
+	add.w	d0,d0
         move.w	d0,d1
-        adda.w	d0,a1
+        adda.w	d0,a1		
         move.w	(a1),d0
 	
 ;;; ----------------------------------
@@ -712,7 +714,7 @@ FC_VOLUfx:
         move.b	d1,d5
         move.b	FC_VOICE_VibratoAmp(a0),d4
         add.b	d4,d4
-        move.b	FC_VOICE_VibratoAmp2(a0),d1
+        move.b	FC_VOICE_VibratoAmpTmp(a0),d1
         tst.b	d7
         bpl.s	.vib1
         btst	#0,d7
@@ -732,7 +734,7 @@ FC_VOLUfx:
         bclr	d2,d7
         move.b	d4,d1
 .vib3:
-        move.b	d1,FC_VOICE_VibratoAmp2(a0)
+        move.b	d1,FC_VOICE_VibratoAmpTmp(a0)
 .vib4:
         lsr.b	#1,d4
         sub.b	d4,d1
@@ -754,8 +756,6 @@ FC_VOLUfx:
 ;;; ----------------------------------
 ;;; PORTAMENTO
 ;;; ----------------------------------
-
-	bra	.nn2		; TODO 
 
         not.b	FC_VOICE_PortamentoSwitch(a0)
         beq.s	.pitchbend
@@ -783,7 +783,11 @@ FC_VOLUfx:
         sub.w	d1,FC_VOICE_Portamento(a0)
 .addporta:
         add.w	FC_VOICE_Portamento(a0),d0
-        cmpi.w	#$0070,d0
+
+
+;;; keep period in range
+.periodinrange:
+	cmpi.w	#$0070,d0
         bhi.s	.nn1
         move.w	#$0071,d0
 .nn1:
@@ -791,6 +795,8 @@ FC_VOLUfx:
         bls.s	.nn2
         move.w	#$0d60,d0
 .nn2:
+
+;;; prepare result
         swap	d0
         move.b	FC_VOICE_Volume(a0),d0
 	rts
@@ -822,13 +828,12 @@ VOLpoint: dc.l 0
 SILENT: dc.w $0100,$0000,$0000,$00e1
 
 FC_PERIODS:
-	;;   C     C#    D     D#    E     F     F#    G     G#    A     A#    B
-	dc.w $06b0,$0650,$05f4,$05a0,$054c,$0500,$04b8,$0474,$0434,$03f8,$03c0,$038a
-	dc.w $0358,$0328,$02fa,$02d0,$02a6,$0280,$025c,$023a,$021a,$01fc,$01e0,$01c5
-	dc.w $01ac,$0194,$017d,$0168,$0153,$0140,$012e,$011d,$010d,$00fe,$00f0,$00e2
-	dc.w $00d6,$00ca,$00be,$00b4,$00aa,$00a0,$0097,$008f,$0087,$007f,$0078,$0071
+	dc.w $06b0,$0650,$05f4,$05a0,$054c,$0500,$04b8,$0474,$0434,$03f8,$03c0,$038a ; octave 2
+	dc.w $0358,$0328,$02fa,$02d0,$02a6,$0280,$025c,$023a,$021a,$01fc,$01e0,$01c5 ; octave 3
+	dc.w $01ac,$0194,$017d,$0168,$0153,$0140,$012e,$011d,$010d,$00fe,$00f0,$00e2 ; octave 4
+	dc.w $00d6,$00ca,$00be,$00b4,$00aa,$00a0,$0097,$008f,$0087,$007f,$0078,$0071 ; octave 5
 	dc.w $0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071
-	dc.w $0d60,$0ca0,$0be8,$0b40,$0a98,$0a00,$0970,$08e8,$0868,$07f0,$0780,$0714
+	dc.w $0d60,$0ca0,$0be8,$0b40,$0a98,$0a00,$0970,$08e8,$0868,$07f0,$0780,$0714 ; octave 1
 	dc.w $1ac0,$1940,$17d0,$1680,$1530,$1400,$12e0,$11d0,$10d0,$0fe0,$0f00,$0e28
 	dc.w $06b0,$0650,$05f4,$05a0,$054c,$0500,$04b8,$0474,$0434,$03f8,$03c0,$038a
 	dc.w $0358,$0328,$02fa,$02d0,$02a6,$0280,$025c,$023a,$021a,$01fc,$01e0,$01c5
