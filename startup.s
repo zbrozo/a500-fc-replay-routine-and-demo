@@ -20,15 +20,8 @@ OwnBlitter	=	-456
 DisownBlitter	=	-462
 WaitBlit	=	-228
 
-; --- DMA Registers
-CUSTOM		=	$dff000
-INTENA		=	$09a
-INTENAR		=	$01c
-INTREQ		=	$09c
-INTREQR		=	$01e	
-DMACON		=	$096
-DMACONR		=	$002
-
+	include custom.i
+	
 Init:
 	bsr	StopAllFloppyDrives
 	bsr	StopTheSystem
