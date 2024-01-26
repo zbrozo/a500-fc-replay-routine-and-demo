@@ -22,6 +22,7 @@
 
 FC_SAMPLES_NR		= 10
 FC_WAVEFORMS_NR		= 80	
+FC_CHANNELS_NR		= 4
 	
 FC_MOD_SEQ_SIZE		= 4		; size of sequence table
 FC_MOD_PAT 		= 8		; long - offset to patterns
@@ -195,7 +196,7 @@ FC_InitVoices:
 	
 	moveq	#0,d2		; bit number in bitmask
 	moveq	#0,d3		; offset to voice in sequence table
-	moveq	#4-1,d5
+	moveq	#FC_CHANNELS_NR-1,d5
 .l:
 	bsr.b	FC_InitVoice
         lea	FC_VOICE_SIZE(a0),a0
@@ -326,8 +327,8 @@ FC_PLAY:
         cmp.w	d0,d7
         bne.s	.chan2
         move.w	d5,(a0)
-        move.l	a1,$a0(a6)		;Set samplestart
-        move.w	d1,$a4(a6)		;Set samplelength
+        move.l	a1,AUD0LC(a6)		;Set samplestart
+        move.w	d1,AUD0LEN(a6)		;Set samplelength
 .chan2:
         lea	FC_VOICE_SIZE(a0),a0
         move.w	(a0),d7
@@ -336,8 +337,8 @@ FC_PLAY:
         cmp.w	d0,d7
         bne.s	.chan3
         move.w	d5,(a0)
-        move.l	a2,$b0(a6)
-        move.w	d2,$b4(a6)
+        move.l	a2,AUD1LC(a6)
+        move.w	d2,AUD1LEN(a6)
 .chan3:
         lea	FC_VOICE_SIZE(a0),a0
         move.w	(a0),d7
@@ -346,8 +347,8 @@ FC_PLAY:
         cmp.w	d0,d7
         bne.s	.chan4
         move.w	d5,(a0)
-        move.l	a3,$c0(a6)
-        move.w	d3,$c4(a6)
+        move.l	a3,AUD2LC(a6)
+        move.w	d3,AUD2LEN(a6)
 .chan4:
         lea	FC_VOICE_SIZE(a0),a0
         move.w	(a0),d7
@@ -356,8 +357,8 @@ FC_PLAY:
         cmp.w	d0,d7
         bne.s	.endplay
         move.w	d5,(a0)
-        move.l	a4,$d0(a6)
-        move.w	d4,$d4(a6)
+        move.l	a4,AUD3LC(a6)
+        move.w	d4,AUD3LEN(a6)
 .endplay:
 
 	rts
@@ -422,9 +423,10 @@ FC_NewNote:
         move.b	(a1),d1
         move.b	d1,FC_VOICE_NoteInfo(a0)
 
+	;; turn off channel
 	move.w	FC_VOICE_ChannelBitMask(a0),d3
         or.w	d3,(a5)
-        move.w	d3,$dff096
+        move.w	d3,DMACON(a6)
 
         andi.w	#$003f,d1			; Max 64 instruments
         add.b	FC_VOICE_SoundTranspose(a0),d1	; add Soundtranspose
@@ -491,9 +493,10 @@ FC_Effects:
         cmpi.b	#$e2,d0			;E2 = set waveform
         bne.s	.testE4
 
+	;; turn off channel
         move.w	FC_VOICE_ChannelBitMask(a0),d1
         or.w	d1,(a5)
-        move.w	d1,$dff096
+        move.w	d1,DMACON(a6)
 
 	moveq	#0,d0
         move.b	1(a1),d0
@@ -540,10 +543,11 @@ FC_Effects:
 
         cmpi.b	#$e9,d0
         bne.s	.testpatjmp
-	
+
+	;; turn off channel
         move.w	FC_VOICE_ChannelBitMask(a0),d1
         or.w	d1,(a5)
-        move.w	d1,$dff096
+        move.w	d1,DMACON(a6)
 	
         moveq	#0,d0
         move.b	1(a1),d0
