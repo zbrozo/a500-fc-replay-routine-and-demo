@@ -93,12 +93,13 @@ FC_END:
         bclr	#1,$bfe001
         rts
 
+;;; in: a0 - module
 INIT_MUSIC:
 FC_INIT:
         bset	#1,$bfe001	
 	
         lea	FC_MOD_SEQ(a0),a1
-        move.l	a1,SEQpoint
+	move.l	a1,SEQpoint
 
 	move.l	a0,a1
         add.l	FC_MOD_PAT(a0),a1
@@ -112,12 +113,21 @@ FC_INIT:
         add.l	FC_MOD_VOL(a0),a1
         move.l	a1,VOLpoint
 
-	lea	FC_PlayInfo(pc),a5
+	move.l	FC_MOD_SEQ_SIZE(a0),d0
 	
+	lea	FC_PlayInfo(pc),a5
+
 	bsr	FC_InitSamples
 	bsr	FC_InitWaveforms
+
+	move.l	SEQpoint(pc),a0
 	bsr	FC_InitSpeed
+
+        lea	FC_VoicesInfo(pc),a0
+	move.l	PATpoint(pc),a1
+	move.l	SEQpoint(pc),a2
 	bsr	FC_InitVoices
+
 	rts
 
 FC_InitSamples:	
@@ -168,8 +178,8 @@ FC_InitWaveforms:
         dbf	d1,.loop
 	rts
 
+;;; in: a0 - seq ptr
 FC_InitSpeed:
-	move.l	SEQpoint(pc),a0
         moveq	#0,d2
         move.b	FC_SEQ_SPEED(a0),d2	;Get replay speed
         bne.s	.ok
@@ -183,17 +193,12 @@ FC_InitVoices:
 	move.w	#0,FC_PlayInfo_ChannelBitMask(a5)
 
 	lea	CUSTOM,a6
-	
         move.w	#$000f,DMACON(a6)		; Disable audio DMA
         move.w	#$0780,INTENA(a6)		; Disable audio IRQ
 
-        moveq	#0,d7			; start offset in sequence
-	move.l	FC_MOD_SEQ_SIZE(a0),d0
-	
-        lea	FC_VoicesInfo(pc),a0		
-
 	lea	(CUSTOM+AUD0LC),a6
 	
+        moveq	#0,d7		; start offset in sequence
 	moveq	#0,d2		; bit number in bitmask
 	moveq	#0,d3		; offset to voice in sequence table
 	moveq	#FC_CHANNELS_NR-1,d5
@@ -205,15 +210,19 @@ FC_InitVoices:
 	adda.w	#$10,a6		; next channel dma
 	dbf	d5,.l
 	rts
-	
+
+;;; in: a0 - voice info
+;;; in: a1 - PAT point
+;;; in: a2 - SEQ point
+;;; in: a6 - custom dma + channel offset
 FC_InitVoice:
 
 	;; clear channel info
-	move.l	a0,a1
+	move.l	a0,a3
 	moveq	#0,d4
 	moveq	#FC_VOICE_SIZE/4-1,d1
 .l:
-	move.l	d4,(a1)+
+	move.l	d4,(a3)+
 	dbf	d1,.l
 	
         move.l	#FC_SILENT_VOLUME,FC_VOICE_VolumePtr(a0)
@@ -225,33 +234,36 @@ FC_InitVoice:
         moveq	#0,d4
         bset	d3,d4
         move.w	d4,FC_VOICE_ChannelBitMask(a0)
-	
-        move.l	#$0000,(a6)
-        move.w	#$0100,4(a6)
-        move.w	#$0000,6(a6)
-        move.w	#$0000,8(a6)
+
+ 	;; initialize channel dma
+        move.l	#FC_SILENT_SAMPLE,(a6)
+        move.w	#2,4(a6)
+        move.w	#0,6(a6)
+        move.w	#0,8(a6)
 
 	move.l	a6,FC_VOICE_ChannelDMABase(a0)
 	
-        move.l	SEQpoint(pc),FC_VOICE_EndOfSeq(a0)
-	add.l	d0,FC_VOICE_EndOfSeq(a0)
-        add.l	d2,FC_VOICE_EndOfSeq(a0)
-	
-        move.l	SEQpoint(pc),FC_VOICE_BeginOfSeq(a0)
-        add.l	d7,FC_VOICE_BeginOfSeq(a0)
-        add.l	d2,FC_VOICE_BeginOfSeq(a0)
+        move.l	a2,a3
+	adda.w	d0,a3
+        adda.w	d2,a3
+	move.l	a3,FC_VOICE_EndOfSeq(a0)
+
+        move.l	a2,a3
+        adda.w	d7,a3
+        adda.w	d2,a3
+	move.l	a3,FC_VOICE_BeginOfSeq(a0)
 	
         move.l 	(a0),a3			; pattern pointer
         move.b	(a3),d1
 	andi.l	#$00ff,d1
         lsl.w	#6,d1			; pattern size = 64 bytes
-	
-        move.l	PATpoint(pc),a4
-        adda.w	d1,a4
-        move.l	a4,FC_VOICE_PatternPtr(a0)
-	
+
         move.b	1(a3),FC_VOICE_Transpose(a0)
         move.b	2(a3),FC_VOICE_SoundTranspose(a0)
+	
+        move.l	a1,a3
+        adda.w	d1,a3
+        move.l	a3,FC_VOICE_PatternPtr(a0)
 	rts
 ;;; ----------------------------------
 ;;; ----------------------------------
@@ -831,6 +843,8 @@ FC_SILENT_VOLUME: 	dc.b 1,0,0,0,0,0
 FC_SILENT_FREQ: 	dc.b $e1
 			EVEN
 
+FC_SILENT_SAMPLE:	dc.w 0
+	
 FC_VoicesInfo:
 	ds.b FC_VOICE_SIZE	;Voice 1 data area
 	ds.b FC_VOICE_SIZE	;Voice 2 data area
@@ -844,11 +858,12 @@ FC_PERIODS:
 	dc.w $00d6,$00ca,$00be,$00b4,$00aa,$00a0,$0097,$008f,$0087,$007f,$0078,$0071 ; octave 5
 	dc.w $0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071
 	dc.w $0d60,$0ca0,$0be8,$0b40,$0a98,$0a00,$0970,$08e8,$0868,$07f0,$0780,$0714 ; octave 1
-	dc.w $1ac0,$1940,$17d0,$1680,$1530,$1400,$12e0,$11d0,$10d0,$0fe0,$0f00,$0e28
+*	dc.w $1ac0,$1940,$17d0,$1680,$1530,$1400,$12e0,$11d0,$10d0,$0fe0,$0f00,$0e28
 	dc.w $06b0,$0650,$05f4,$05a0,$054c,$0500,$04b8,$0474,$0434,$03f8,$03c0,$038a
 	dc.w $0358,$0328,$02fa,$02d0,$02a6,$0280,$025c,$023a,$021a,$01fc,$01e0,$01c5
 	dc.w $01ac,$0194,$017d,$0168,$0153,$0140,$012e,$011d,$010d,$00fe,$00f0,$00e2
 	dc.w $00d6,$00ca,$00be,$00b4,$00aa,$00a0,$0097,$008f,$0087,$007f,$0078,$0071
+	dc.w $0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071
 
 FC_SamplesInfo:
 	REPT	FC_SAMPLES_NR
