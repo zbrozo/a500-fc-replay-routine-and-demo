@@ -476,6 +476,8 @@ FC_NewNote:
 ;;; a0 - voice data
 ;;; a5 - FC_PlayInfo
 FC_Effects:
+	move.b	#$f,d4		; command mask
+	move.b	#$e0,d5		; command mask
 	moveq	#0,d7		; for clearing
 .testsustain:
         tst.b	FC_VOICE_SustainTime(a0)	; Is sustain counter = 0
@@ -486,25 +488,40 @@ FC_Effects:
 	move.l	FC_VOICE_FreqPtr(a0),a1	; can be executed now.
         adda.w	FC_VOICE_FreqPos(a0),a1
 .testeffects:
-        cmpi.b	#$e1,(a1)		;E1 = end of FREQseq sequence
-        beq	FC_VOLUfx
-	
-        move.b	(a1),d0
-	
-        cmpi.b	#$e0,d0			;E0 = loop to other part of sequence
-        bne.s	.testnewsound
 
+	moveq	#0,d0
+	move.b	(a1),d0
+	move.b	d0,d1
+	and.b	d5,d1
+	cmp.b	d5,d1
+	bne	.transpose
+	and.b	d4,d0
+	add.w	d0,d0
+	move.w	.cmds(pc,d0.w),d0
+	jmp	.cmds(pc,d0.w)
+
+.cmds:
+	dc.w	.testloop-.cmds		;E0 = loop to other part of sequence
+	dc.w	FC_VOLUfx-.cmds		;E1 = end of FREQseq sequence
+	dc.w	.testnewsound-.cmds	;E2 = set waveform
+	dc.w	.testnewvib-.cmds	;E3
+	dc.w	.testE4-.cmds		;E4
+	dc.w	FC_VOLUfx-.cmds		;E5 - not used
+	dc.w	FC_VOLUfx-.cmds		;E6 - not used
+	dc.w	.testpatjmp-.cmds	;E7
+	dc.w	.testnewsustain-.cmds	;E8
+	dc.w	.testE9-.cmds		;E9
+	dc.w	.testpitchbend-.cmds	;EA
+	
+.testloop:
 	move.b	1(a1),d1		;loop to start of sequence + 1(a1)
         andi.w	#$003f,d1
         move.w	d1,FC_VOICE_FreqPos(a0)
         move.l	FC_VOICE_FreqPtr(a0),a1
         adda.w	d1,a1
-        move.b	(a1),d0
+	bra	.testeffects
 	
 .testnewsound:
-        cmpi.b	#$e2,d0			;E2 = set waveform
-        bne.s	.testE4
-
 	;; turn off channel
         move.w	FC_VOICE_ChannelBitMask(a0),d1
         or.w	d1,(a5)
@@ -531,9 +548,6 @@ FC_Effects:
 	addq.w	#2,FC_VOICE_FreqPos(a0)
         bra	.transpose
 .testE4:
-        cmpi.b	#$e4,d0
-        bne.s	.testE9
-
 	moveq	#0,d0
         move.b	1(a1),d0
 	
@@ -552,10 +566,6 @@ FC_Effects:
         addq.w	#2,FC_VOICE_FreqPos(a0)
         bra	.transpose
 .testE9:
-
-        cmpi.b	#$e9,d0
-        bne.s	.testpatjmp
-
 	;; turn off channel
         move.w	FC_VOICE_ChannelBitMask(a0),d1
         or.w	d1,(a5)
@@ -592,10 +602,6 @@ FC_Effects:
         bra.s	.transpose
 	
 .testpatjmp:
-	
-        cmpi.b	#$e7,d0
-        bne.s	.testpitchbend
-
         moveq	#0,d0
         move.b	1(a1),d0
         lsl.w	d6,d0
@@ -606,29 +612,21 @@ FC_Effects:
         move.w	d7,FC_VOICE_FreqPos(a0)
 	
         bra	.testeffects
+	
 .testpitchbend:
-        cmpi.b	#$ea,d0
-        bne.s	.testnewsustain
-
 	move.b	1(a1),FC_VOICE_PitchBendStep(a0)
         move.b	2(a1),FC_VOICE_PitchBendSustainTime(a0)
         addq.w	#3,FC_VOICE_FreqPos(a0)
         bra.s	.transpose
 	
 .testnewsustain:
-        cmpi.b	#$e8,d0
-        bne.s	.testnewvib
-	
         move.b	1(a1),FC_VOICE_SustainTime(a0)
         addq.w	#2,FC_VOICE_FreqPos(a0)
         bra	.testsustain
 	
 .testnewvib:
-        cmpi.b	#$e3,(a1)+
-        bne.s	.transpose
-	
-        move.b	(a1)+,FC_VOICE_VibratoSpeed(a0)
-        move.b	(a1),FC_VOICE_VibratoAmp(a0)
+        move.b	1(a1),FC_VOICE_VibratoSpeed(a0)
+        move.b	2(a1),FC_VOICE_VibratoAmp(a0)
 
         addq.w	#3,FC_VOICE_FreqPos(a0)
 
@@ -714,7 +712,6 @@ FC_VOLUfx:
 ;;; ----------------------------------
 ;;; VIBRATO
 ;;; ----------------------------------
-
 	move.b	FC_VOICE_VibratoState(a0),d7
 
 	tst.b	FC_VOICE_VibratoDelay(a0)		;Vibrato_delay = zero ?
