@@ -473,8 +473,9 @@ FC_NewNote:
         rts
 	
 ;;; ----------------------------------
-;;; a0 - voice data
-;;; a5 - FC_PlayInfo
+;;; in: a0 - voice data
+;;; in: a5 - FC_PlayInfo
+;;; in: d6 = 6 (for multiplying by 64 - it's max length of freq table)
 FC_Effects:
 	move.b	#$f,d4		; command mask
 	move.b	#$e0,d5		; command mask
@@ -501,19 +502,19 @@ FC_Effects:
 	jmp	.cmds(pc,d0.w)
 
 .cmds:
-	dc.w	.testloop-.cmds		;E0 = loop to other part of sequence
+	dc.w	.cmdE0loop-.cmds	;E0 = loop to other part of sequence
 	dc.w	FC_VOLUfx-.cmds		;E1 = end of FREQseq sequence
-	dc.w	.testnewsound-.cmds	;E2 = set waveform
-	dc.w	.testnewvib-.cmds	;E3
-	dc.w	.testE4-.cmds		;E4
+	dc.w	.cmdE2newsound-.cmds	;E2 = set waveform
+	dc.w	.cmdE3newvib-.cmds	;E3
+	dc.w	.cmdE4changesound-.cmds ;E4
 	dc.w	FC_VOLUfx-.cmds		;E5 - not used
 	dc.w	FC_VOLUfx-.cmds		;E6 - not used
-	dc.w	.testpatjmp-.cmds	;E7
-	dc.w	.testnewsustain-.cmds	;E8
-	dc.w	.testE9-.cmds		;E9
-	dc.w	.testpitchbend-.cmds	;EA
+	dc.w	.cmdE7jmp-.cmds		;E7
+	dc.w	.cmdE8newsustain-.cmds	;E8
+	dc.w	.cmdE9newsample-.cmds	;E9
+	dc.w	.cmdEApitchbend-.cmds	;EA
 	
-.testloop:
+.cmdE0loop:
 	move.b	1(a1),d1		;loop to start of sequence + 1(a1)
         andi.w	#$003f,d1
         move.w	d1,FC_VOICE_FreqPos(a0)
@@ -521,7 +522,7 @@ FC_Effects:
         adda.w	d1,a1
 	bra	.testeffects
 	
-.testnewsound:
+.cmdE2newsound:
 	;; turn off channel
         move.w	FC_VOICE_ChannelBitMask(a0),d1
         or.w	d1,(a5)
@@ -547,7 +548,7 @@ FC_Effects:
 
 	addq.w	#2,FC_VOICE_FreqPos(a0)
         bra	.transpose
-.testE4:
+.cmdE4changesound:
 	moveq	#0,d0
         move.b	1(a1),d0
 	
@@ -565,7 +566,7 @@ FC_Effects:
 	
         addq.w	#2,FC_VOICE_FreqPos(a0)
         bra	.transpose
-.testE9:
+.cmdE9newsample:
 	;; turn off channel
         move.w	FC_VOICE_ChannelBitMask(a0),d1
         or.w	d1,(a5)
@@ -601,7 +602,7 @@ FC_Effects:
         addq.w	#3,FC_VOICE_FreqPos(a0)
         bra.s	.transpose
 	
-.testpatjmp:
+.cmdE7jmp:
         moveq	#0,d0
         move.b	1(a1),d0
         lsl.w	d6,d0
@@ -613,18 +614,18 @@ FC_Effects:
 	
         bra	.testeffects
 	
-.testpitchbend:
+.cmdEApitchbend:
 	move.b	1(a1),FC_VOICE_PitchBendStep(a0)
         move.b	2(a1),FC_VOICE_PitchBendSustainTime(a0)
         addq.w	#3,FC_VOICE_FreqPos(a0)
         bra.s	.transpose
 	
-.testnewsustain:
+.cmdE8newsustain:
         move.b	1(a1),FC_VOICE_SustainTime(a0)
         addq.w	#2,FC_VOICE_FreqPos(a0)
         bra	.testsustain
 	
-.testnewvib:
+.cmdE3newvib:
         move.b	1(a1),FC_VOICE_VibratoSpeed(a0)
         move.b	2(a1),FC_VOICE_VibratoAmp(a0)
 
