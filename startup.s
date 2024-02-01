@@ -19,8 +19,6 @@ WaitTOF		=	-270
 OwnBlitter	=	-456
 DisownBlitter	=	-462
 WaitBlit	=	-228
-
-	include custom.i
 	
 Init:
 	bsr	StopAllFloppyDrives
@@ -29,7 +27,6 @@ Init:
 	
 	move.l	VectorBaseRegister(pc),a0
 	move.l	$6c(a0),SavedLevel3Int
-	move.l	#IntLevel3Handler,$6c(a0)
         rts
         
 Quit:   
@@ -37,67 +34,6 @@ Quit:
 	bsr	RestoreTheSystem
 	moveq	#0,d0
 	rts
-
-IntLevel3Handler:
-
-	movem.l	d0-a6,-(a7)
-
-	lea	CUSTOM,a6
-	move.w	INTREQR(a6),d0
-	btst	#5,d0
-	beq.b	.skipVertb
-
-	move.w	#$20,d0
-	move.w	d0,INTREQ(a6)	;twice for A4000 compatibility
-	move.w	d0,INTREQ(a6)
-
-	IFNE	DEF_COUNTERS
-	addq.w	#1,FrameCounter
-	ENDC
-	
-	move.l	pVertbInt(pc),a0
-	jsr	(a0)
-	
-.skipVertb:
-
-	lea	CUSTOM,a6
-	move.w	INTREQR(a6),d0
-	btst	#6,d0
-	beq.b	.skipBlit	
-
-	move.w	#$40,d0
-	move.w	d0,INTREQ(a6)	;twice for A4000 compatibility
-	move.w	d0,INTREQ(a6)
-	
-	IFNE	DEF_COUNTERS
-	addq.w	#1,BlitCounter
-	ENDC
-	
-	move.l	pBlitterInt(pc),a0
-	jsr	(a0)
-	
-.skipBlit:
-
-	lea	CUSTOM,a6
-	move.w	INTREQR(a6),d0
-	btst	#4,d0
-	beq.b	.skipCopper
-
-	move.w	#$10,d0
-	move.w	d0,INTREQ(a6)	;twice for A4000 compatibility
-	move.w	d0,INTREQ(a6)
-	
-	IFNE	DEF_COUNTERS
-	addq.w	#1,CopCounter
-	ENDC
-	
-	move.l	pCopperInt(pc),a0
-	jsr	(a0)
-	
-.skipCopper:
-
-	movem.l	(a7)+,d0-a6
-	rte
 
 StopAllFloppyDrives:  
 	move.l	(SysBase).w,a6
@@ -221,71 +157,7 @@ RestoreDMA:
 	move.w	#0,$88(a6)
 	rts
 	
-pVertbInt:
-	dc.l	NullHandler
-pBlitterInt:
-	dc.l	NullHandler
-pCopperInt:
-	dc.l	NullHandler
 
-None:
-NullHandler:
-	rts
-
-WaitVBlank:
-.l1:
-	tst.b	$dff005
-	beq.b	.l1
-.l2:
-	tst.b	$dff005
-	bne.b	.l2
-	rts	
-
-; d0 - raster value
-WaitRaster:				
-.l:
-	move.l $dff004,d1
-	lsr.l #1,d1
-	lsr.w #7,d1
-	cmp.w d0,d1
-	bne.s .l			;wait until it matches (eq)
-	rts
-	
-WaitBlitter:				;wait until blitter is finished
-	tst.w 	(a6)			;for compatibility with A1000
-.loop:
-	btst 	#6,2(a6)
-	bne.s 	.loop
-	rts
-
-	IFNE	DEF_COUNTERS
-
-ClearCounters:
-	move.w	#0,d0
-	move.w	d0,FrameCounter
-	move.w	d0,BlitCounter
-	move.w	d0,CopCounter
-	rts
-	
-CountMaxFrames:
-        move.w	FrameCounter(pc),d0           
-	lea	MaxFrameCounter(pc),a0
-        cmp.w   (a0),d0
-        blt     .skip
-        move.w  d0,(a0)
-.skip:
-        rts
-
-FrameCounter:   
-	dc.w	0
-MaxFrameCounter:
-        dc.w    0
-BlitCounter:
-        dc.w    0
-CopCounter:
-        dc.w    0
-
-	ENDC
 
 VectorBaseRegister:
 	dc.l	0
@@ -316,12 +188,3 @@ diskrep:
 	blk.l	8,0
 
 
-ReadTicks:
-        lea     $bfe001,a0
-        moveq   #0,d0
-        move.b  $a00(a0),d0             ; TODHI
-        lsl.w   #8,d0
-        move.b  $900(a0),d0             ; TODMID
-        lsl.l   #8,d0
-        move.b  $800(a0),d0             ; TODLO
-	rts
