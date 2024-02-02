@@ -9,7 +9,7 @@
 	include startup.s
 	include FC1.4replay.S
 
-D_WAITRASTER = $50
+D_PlayerWaitRaster = $50
 D_FontQuantity = 80
 D_FontWidthInBytes = 1	
 D_FontHeight = 8
@@ -52,7 +52,7 @@ Main:
 	
 	lea	CUSTOM,a6
 	move.w	#$83e0,DMACON(a6)
-	move.w	#$c020,INTENA(a6)
+	move.w	#$c010,INTENA(a6)
 
 	lea	Copper(pc),a0
 	move.l	a0,COP1LCH(a6)
@@ -72,10 +72,6 @@ Main:
 	adda.w	d7,a0
 	bsr	WriteDecValue
 	
-	*move.w	#$f00,$dff180
-	*jsr	PLAY_MUSIC
-	*move.w	#0,$dff180
-
 	btst	#6,$bfe001
 	bne	.loop
 
@@ -83,15 +79,12 @@ Main:
 	bra	Quit
 
 Player:
-	move.w	#D_WAITRASTER,d0
-	bsr	WaitRaster
-
 	move.w	#$0f0,$dff180
 	jsr	PLAY_MUSIC
 	move.w	#D_BackgroundColor,$dff180
 
 	bsr	GetRasterPosition
-	sub.w	#D_WAITRASTER,d0
+	sub.w	#D_PlayerWaitRaster,d0
 	lea	PlayerMaxRasterTime(pc),a0
 	move.w	(a0),d1
 	cmp.w	d0,d1
@@ -109,16 +102,16 @@ IntLevel3Handler:
 
 	lea	CUSTOM,a6
 	move.w	INTREQR(a6),d0
-	btst	#5,d0
-	beq.b	.skipVertb
+	btst	#4,d0
+	beq.b	.skipCopper
 
-	move.w	#$20,d0
+	move.w	#$10,d0
 	move.w	d0,INTREQ(a6)	;twice for A4000 compatibility
 	move.w	d0,INTREQ(a6)
 
 	bsr	Player
 
-.skipVertb:
+.skipCopper:
 
 	movem.l	(a7)+,d0-a6
 	rte
@@ -253,6 +246,7 @@ GetTextLen:
 	bne.s	.l
 	move.l	a2,d7
 	sub.l	a1,d7
+	subq.w	#1,d7
 	rts
 
 ;;; in: d0 - value to convert
@@ -330,6 +324,9 @@ Copper:
 	dc.w	$0188,$0c90,$018a,$0ec0,$018c,$0820,$018e,$0610
 
 	dc.w	$100,$200
+
+	dc.w	D_PlayerWaitRaster*$100+7,$fffe
+	dc.w	$9c,$8010		; int request
 	
 	dc.w	$e007,$fffe
 	
