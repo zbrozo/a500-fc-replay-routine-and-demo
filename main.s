@@ -56,7 +56,6 @@ Main:
 
 	lea	Copper(pc),a0
 	move.l	a0,COP1LCH(a6)
-	move.w	#0,COP1JMP(a6)
 	
 .loop:
 
@@ -78,13 +77,18 @@ Main:
 	jsr	END_MUSIC
 	bra	Quit
 
+;;; **********************************************
+	
 Player:
+	bsr	GetRasterPosition
+	move.w	d0,-(a7)
+
 	move.w	#$0f0,$dff180
 	jsr	PLAY_MUSIC
 	move.w	#D_BackgroundColor,$dff180
 
 	bsr	GetRasterPosition
-	sub.w	#D_PlayerWaitRaster,d0
+	sub.w	(a7)+,d0
 	lea	PlayerMaxRasterTime(pc),a0
 	move.w	(a0),d1
 	cmp.w	d0,d1
@@ -92,6 +96,7 @@ Player:
 	move.w	d0,(a0)
 .ok:
 	rts
+sss:	dc.w	0
 
 PlayerMaxRasterTime:
 	dc.w	0
