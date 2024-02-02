@@ -16,14 +16,14 @@ _LVORemPort		=	-360
 _LVOOpenDevice		=	-444
 _LVOCloseDevice		=	-450
 _LVODoIO		=	-456
-	
+
 ;;; graphics library
 _LVOLoadView 		=	-222
 _LVOWaitTOF		=	-270
 _LVOOwnBlitter		=	-456
 _LVODisownBlitter	=	-462
 _LVOWaitBlit		=	-228
-	
+
 Start:
 	bsr	StopAllFloppyDrives
 
@@ -33,25 +33,25 @@ Start:
 
 	move.l	VectorBaseRegister(pc),a0
 	move.l	$6c(a0),_SavedLevel3Int(a5)
-        rts
-        
-Quit:   
+	rts
+
+Quit:
 	lea	_Saved(pc),a5
 	bsr	RestoreDMA
 	bsr	RestoreTheSystem
 	moveq	#0,d0
 	rts
 
-StopAllFloppyDrives:  
+StopAllFloppyDrives:
 	move.l	(SysBase).w,a6
 	sub.l	a1,a1
 	jsr	_LVOFindTask(a6)
-	
+
 	lea	_diskrep(pc),a5
 	move.l	d0,16(a5)
 	lea	_diskrep(pc),a1
 	jsr	_LVOAddPort(a6)
-	
+
 	moveq	#4-1,d7
 .loop:
 	move.l	d7,d0
@@ -66,22 +66,22 @@ StopAllFloppyDrives:
 	tst.l	d0
 	bne	.next
 
-	lea	_diskio(pc),a1		
-	move.w	#$9,$1c(a1)	
+	lea	_diskio(pc),a1
+	move.w	#$9,$1c(a1)
 	move.l	#0,$24(a1)
 	jsr	_LVODoIO(a6)
 	lea	_diskio(pc),a1
 	jsr	_LVOCloseDevice(a6)
-.next:	
+.next:
 	dbf	d7,.loop
 
-	move.l	(SysBase).w,a6		
+	move.l	(SysBase).w,a6
 	lea	_diskrep(pc),a1
 	jsr	_LVORemPort(a6)
-        rts
-	
+	rts
+
 StopTheSystem:
-	
+
 	move.l	(SysBase).w,a6
 	sub.l	a4,a4
 	btst	#0,297(a6)		;68000 CPU?
@@ -92,9 +92,9 @@ StopTheSystem:
 	lea	GfxName(pc),a1
 	jsr	_LVOOldOpenLibrary(a6)
 	move.l	d0,GfxBase
-	
+
 	move.l	d0,a6
-	
+
 	move.l	$22(a6),_SavedView(a5)
 	move.l	$26(a6),_SavedCopperList(a5)
 
@@ -116,39 +116,39 @@ StopTheSystem:
 	dc.l	$4e7a0801	; "movec VBR,d0"
 	move.l	d0,VectorBaseRegister
 	rte
-	
+
 RestoreTheSystem:
-	
+
         move.l	(SysBase).w,a6
 	jsr	_LVOEnable(a6)
 	jsr	_LVOPermit(a6)
 
-	move.l	GfxBase(pc),a6	
+	move.l	GfxBase(pc),a6
 	move.l	_SavedView(a5),a1
 	jsr	_LVOLoadView(a6)
 	jsr	_LVODisownBlitter(a6)
 
 	move.l	(SysBase).w,a6
 	move.l	GfxBase(pc),a1
-	jsr	_LVOCloseLibrary(a6)	
+	jsr	_LVOCloseLibrary(a6)
 
 	rts
 
-SaveAndStopDMA:	
+SaveAndStopDMA:
 	lea	CUSTOM,a6
 
 	move.w	INTENAR(a6),d0
 	or.w	#$8000,d0
 	move.w	d0,_SavedINTENA(a5)
-	
+
 	move.w	DMACONR(a6),d0
 	or.w	#$8000,d0
 	move.w	d0,_SavedDMACON(a5)
-	
+
 	move.w	#$7fff,INTENA(a6)
 	move.w	#$7fff,DMACON(a6)
 	rts
-	
+
 RestoreDMA:
 	lea	CUSTOM,a6
 
@@ -169,7 +169,7 @@ _SavedDMACON: 		rs.w	1
 _SavedLevel3Int: 	rs.l	1
 _SavedCopperList:	rs.l	1
 _SavedView:		rs.l	1
-	
+
 _Saved:
 	dc.w	0
 	dc.w	0
@@ -179,14 +179,14 @@ _Saved:
 
 VectorBaseRegister:
 	dc.l	0
-	
+
 GfxBase:
 	dc.l	0
-	
+
 GfxName:
 	dc.b	"graphics.library",0
 	EVEN
-	
+
 TrackdiskName:
 	dc.b	"trackdisk.device",0
 	EVEN
@@ -195,5 +195,3 @@ _diskio:
 	blk.l	20,0
 _diskrep:
 	blk.l	8,0
-
-
