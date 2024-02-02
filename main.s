@@ -1,4 +1,5 @@
 ;;; -*- coding: cp852 -*-
+	incdir ZPRJ:fc/
 
 	section main,code_c
 
@@ -24,7 +25,6 @@ D_ScreenBitplanes = 3
 D_BackgroundColor = $000
 	
 Main:
-
 	bsr	Start
 
 	lea	Module(pc),a0
@@ -60,9 +60,18 @@ Main:
 	
 .loop:
 
-	*move.w	#$100,d0
-	*bsr	WaitRaster
+	move.w	#$100,d0
+	bsr	WaitRaster
 
+	move.w	PlayerMaxRasterTime(pc),d0
+	bsr	HexToDec
+
+	lea	Message1(pc),a1
+	bsr	GetTextLen
+	lea	MessageScreen(pc),a0
+	adda.w	d7,a0
+	bsr	WriteDecValue
+	
 	*move.w	#$f00,$dff180
 	*jsr	PLAY_MUSIC
 	*move.w	#0,$dff180
@@ -83,7 +92,7 @@ Player:
 
 	bsr	GetRasterPosition
 	sub.w	#D_WAITRASTER,d0
-	lea	MaxRasterTime(pc),a0
+	lea	PlayerMaxRasterTime(pc),a0
 	move.w	(a0),d1
 	cmp.w	d0,d1
 	bge	.ok
@@ -91,7 +100,7 @@ Player:
 .ok:
 	rts
 
-MaxRasterTime:
+PlayerMaxRasterTime:
 	dc.w	0
 
 IntLevel3Handler:
@@ -191,6 +200,23 @@ WriteTextLine:
 	adda.w	#1,a0
 	dbf	d7,.l
 	rts
+
+;;; a0 - screen
+;;; d0 - dec value
+WriteDecValue:	
+	move.w	d0,d1
+	and.b	#$f0,d0
+	lsr.b	#4,d0
+	add.b	#'0',d0
+	bsr.s	PutFontChar
+
+	addq.w	#1,a0
+	move.b	d1,d0
+	
+	and.b	#$0f,d0
+	add.b	#'0',d0
+	bsr.s	PutFontChar
+	rts
 	
 ;;; a0 - screen
 ;;; d0.w - char
@@ -228,9 +254,26 @@ GetTextLen:
 	move.l	a2,d7
 	sub.l	a1,d7
 	rts
-;;; **********************************************
 
-Message1:	dc.b	"MAKSYMALNY CZAS PLAYERA: ",0
+;;; in: d0 - value to convert
+;;; out: d0 - result
+HexToDec:
+	lea	HexToDecTable(pc),a0
+
+	move.w	d0,d1
+	lsr.w	#4,d1
+	move.b	(a0,d1.w),d1
+	mulu	#$16,d1
+
+	and.w	#$0f,d0
+	move.b	(a0,d0.w),d0
+	add.w	d1,d0
+	rts
+	
+;;; **********************************************
+HexToDecTable:	dc.b	0,1,2,3,4,5,6,7,8,9,$10,$11,$12,$13,$14,$15
+	
+Message1:	dc.b	"RASTER TIME PLAYERA: ",0
 Message2:	dc.b	" RASTR‡W",0
 	EVEN
 	
@@ -268,6 +311,7 @@ FontCodePage852:
 	dc.b 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
 	
 Copper:
+	dc.w	$96,$20
 	dc.w	$1fc,0			;Slow fetch mode, remove if AGA demo.
 	dc.w	$106,$0c00		;(AGA compat. if any Dual Playf. mode)
 
@@ -297,7 +341,7 @@ CopperBitplanes:
 	dc.w	$e8,0
 	dc.w	$ea,0
 
-	dc.w	$100,D_ScreenBitplanes*$1000+$200
+	dc.w	$100,$3200
 
 	dc.w	$e807,$fffe
 
