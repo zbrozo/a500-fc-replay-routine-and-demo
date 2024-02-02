@@ -1,35 +1,42 @@
 SysBase		=	4
-Supervisor	=	-30
-OldOpenLibrary	=	-408
-FindTask	=	-294
-CloseLibrary	=	-414
-Forbid		=	-132
-Permit		=	-138
-Disable		=	-120
-Enable		=	-126
-AddPort		=	-354
-RemPort		=	-360
-OpenDevice	=	-444
-CloseDevice	=	-450
-DoIO		=	-456
+
+;;; *** Library Vector Offsets ***
+
+;;; exec library
+_LVOSupervisor		=	-30
+_LVOOldOpenLibrary	=	-408
+_LVOFindTask		=	-294
+_LVOCloseLibrary	=	-414
+_LVOForbid		=	-132
+_LVOPermit		=	-138
+_LVODisable		=	-120
+_LVOEnable		=	-126
+_LVOAddPort		=	-354
+_LVORemPort		=	-360
+_LVOOpenDevice		=	-444
+_LVOCloseDevice		=	-450
+_LVODoIO		=	-456
 	
-; --- graphics library
-LoadView 	=	-222
-WaitTOF		=	-270
-OwnBlitter	=	-456
-DisownBlitter	=	-462
-WaitBlit	=	-228
+;;; graphics library
+_LVOLoadView 		=	-222
+_LVOWaitTOF		=	-270
+_LVOOwnBlitter		=	-456
+_LVODisownBlitter	=	-462
+_LVOWaitBlit		=	-228
 	
-Init:
+Start:
 	bsr	StopAllFloppyDrives
+
+	lea	_Saved(pc),a5
 	bsr	StopTheSystem
 	bsr	SaveAndStopDMA
-	
+
 	move.l	VectorBaseRegister(pc),a0
-	move.l	$6c(a0),SavedLevel3Int
+	move.l	$6c(a0),_SavedLevel3Int(a5)
         rts
         
 Quit:   
+	lea	_Saved(pc),a5
 	bsr	RestoreDMA
 	bsr	RestoreTheSystem
 	moveq	#0,d0
@@ -38,39 +45,39 @@ Quit:
 StopAllFloppyDrives:  
 	move.l	(SysBase).w,a6
 	sub.l	a1,a1
-	jsr	FindTask(a6)
+	jsr	_LVOFindTask(a6)
 	
-	lea	diskrep(pc),a5
+	lea	_diskrep(pc),a5
 	move.l	d0,16(a5)
-	lea	diskrep(pc),a1
-	jsr	AddPort(a6)
+	lea	_diskrep(pc),a1
+	jsr	_LVOAddPort(a6)
 	
 	moveq	#4-1,d7
 .loop:
 	move.l	d7,d0
 	moveq	#0,d1
 
-	lea	diskio(pc),a1
-	lea	diskrep(pc),a5
+	lea	_diskio(pc),a1
+	lea	_diskrep(pc),a5
 	move.l	a5,14(a1)
 
 	lea	TrackdiskName(pc),a0
-	jsr	OpenDevice(a6)
+	jsr	_LVOOpenDevice(a6)
 	tst.l	d0
 	bne	.next
 
-	lea	diskio(pc),a1		
+	lea	_diskio(pc),a1		
 	move.w	#$9,$1c(a1)	
 	move.l	#0,$24(a1)
-	jsr	DoIO(a6)
-	lea	diskio(pc),a1
-	jsr	CloseDevice(a6)
+	jsr	_LVODoIO(a6)
+	lea	_diskio(pc),a1
+	jsr	_LVOCloseDevice(a6)
 .next:	
 	dbf	d7,.loop
 
 	move.l	(SysBase).w,a6		
-	lea	diskrep(pc),a1
-	jsr	RemPort(a6)
+	lea	_diskrep(pc),a1
+	jsr	_LVORemPort(a6)
         rts
 	
 StopTheSystem:
@@ -80,29 +87,29 @@ StopTheSystem:
 	btst	#0,297(a6)		;68000 CPU?
 	beq.b	.68k
 	lea	.GetVBR(pc),a5
-	jsr	Supervisor(a6)
+	jsr	_LVOSupervisor(a6)
 .68k:
 	lea	GfxName(pc),a1
-	jsr	OldOpenLibrary(a6)
+	jsr	_LVOOldOpenLibrary(a6)
 	move.l	d0,GfxBase
 	
-	move.l	d0,a6	
-	move.l	$22(a6),SavedView
-	move.l	$26(a6),SavedCopperList
+	move.l	d0,a6
+	
+	move.l	$22(a6),_SavedView(a5)
+	move.l	$26(a6),_SavedCopperList(a5)
 
 	sub.l	a1,a1
-	jsr	LoadView(a6)
+	jsr	_LVOLoadView(a6)
 
-	jsr	WaitTOF(a6)
-	jsr	WaitTOF(a6)
+	jsr	_LVOWaitTOF(a6)
+	jsr	_LVOWaitTOF(a6)
 
-	jsr	OwnBlitter(a6)
-	jsr	WaitBlit(a6)
+	jsr	_LVOOwnBlitter(a6)
+	jsr	_LVOWaitBlit(a6)
 
 	move.l	(SysBase).w,a6
-	jsr	Forbid(a6)
-	jsr	Disable(a6)
-
+	jsr	_LVOForbid(a6)
+	jsr	_LVODisable(a6)
 	rts
 
 .GetVBR:
@@ -113,17 +120,17 @@ StopTheSystem:
 RestoreTheSystem:
 	
         move.l	(SysBase).w,a6
-	jsr	Enable(a6)
-	jsr	Permit(a6)
+	jsr	_LVOEnable(a6)
+	jsr	_LVOPermit(a6)
 
 	move.l	GfxBase(pc),a6	
-	move.l	SavedView(pc),a1
-	jsr	LoadView(a6)
-	jsr	DisownBlitter(a6)
+	move.l	_SavedView(a5),a1
+	jsr	_LVOLoadView(a6)
+	jsr	_LVODisownBlitter(a6)
 
 	move.l	(SysBase).w,a6
 	move.l	GfxBase(pc),a1
-	jsr	CloseLibrary(a6)	
+	jsr	_LVOCloseLibrary(a6)	
 
 	rts
 
@@ -132,11 +139,11 @@ SaveAndStopDMA:
 
 	move.w	INTENAR(a6),d0
 	or.w	#$8000,d0
-	move.w	d0,SavedINTENA
+	move.w	d0,_SavedINTENA(a5)
 	
 	move.w	DMACONR(a6),d0
 	or.w	#$8000,d0
-	move.w	d0,SavedDMACON
+	move.w	d0,_SavedDMACON(a5)
 	
 	move.w	#$7fff,INTENA(a6)
 	move.w	#$7fff,DMACON(a6)
@@ -149,29 +156,30 @@ RestoreDMA:
 	move.w	#$7fff,DMACON(a6)
 
 	move.l	VectorBaseRegister(pc),a0
-	move.l	SavedLevel3Int(pc),$6c(a0)
-	move.w	SavedINTENA(pc),INTENA(a6)
-	move.w	SavedDMACON(pc),DMACON(a6)
-
-	move.l	SavedCopperList(pc),$80(a6)
-	move.w	#0,$88(a6)
+	move.l	_SavedLevel3Int(a5),$6c(a0)
+	move.w	_SavedINTENA(a5),INTENA(a6)
+	move.w	_SavedDMACON(a5),DMACON(a6)
+	move.l	_SavedCopperList(a5),COP1LCH(a6)
+	move.w	#0,COP1JMP(a6)
 	rts
-	
 
+	rsreset
+_SavedINTENA: 		rs.w	1
+_SavedDMACON: 		rs.w	1
+_SavedLevel3Int: 	rs.l	1
+_SavedCopperList:	rs.l	1
+_SavedView:		rs.l	1
+	
+_Saved:
+	dc.w	0
+	dc.w	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
 
 VectorBaseRegister:
 	dc.l	0
-SavedINTENA:
-	dc.w	0
-SavedDMACON:
-	dc.w	0
-SavedLevel3Int:
-	dc.l	0
-SavedCopperList:
-	dc.l	0
-SavedView:
-	dc.l	0
-
+	
 GfxBase:
 	dc.l	0
 	
@@ -182,9 +190,10 @@ GfxName:
 TrackdiskName:
 	dc.b	"trackdisk.device",0
 	EVEN
-diskio:
+
+_diskio:
 	blk.l	20,0
-diskrep:
+_diskrep:
 	blk.l	8,0
 
 
