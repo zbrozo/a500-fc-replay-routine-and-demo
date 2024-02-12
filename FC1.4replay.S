@@ -46,8 +46,8 @@ FC_VOICE_VolumeTime	= 15		; byte
 FC_VOICE_VolumePos	= 16		; word
 FC_VOICE_FreqPtr	= 18		; long
 FC_VOICE_SoundTranspose	= 22		; byte - instrument change
-FC_VOICE_VolumeDelayTmp	= 23		; byte	- for calculation
-FC_VOICE_VolumeDelay 	= 24		; byte
+FC_VOICE_VolumeSpeedTmp	= 23		; byte	- for calculation
+FC_VOICE_VolumeSpeed 	= 24		; byte
 FC_VOICE_SustainVolume	= 25		; byte
 FC_VOICE_SustainTime	= 26		; byte
 FC_VOICE_VibratoSpeed   = 27		; byte
@@ -56,7 +56,7 @@ FC_VOICE_VibratoAmpTmp	= 29		; byte - temporary value for calculation
 FC_VOICE_VibratoDelay	= 30		; byte
 FC_VOICE_ChannelBitMask	= 32		; word
 FC_VOICE_PatternPtr	= 34		; long
-FC_VOICE_VolumeSwitch	= 38		; byte
+FC_VOICE_VolumeDelay	= 38		; byte
 FC_VOICE_PortamentoDelay = 39		; byte
 FC_VOICE_PatternPos 	= 40		; word
 FC_VOICE_PitchBendDelay = 42		; byte
@@ -228,8 +228,8 @@ FC_InitVoice:
         move.l	#FC_SILENT_VOLUME,FC_VOICE_VolumePtr(a0)
         move.l	#FC_SILENT_FREQ,FC_VOICE_FreqPtr(a0)
         move.w	#FC_SEQ_SIZE,FC_VOICE_SeqPos(a0)
-	move.b	#1,FC_VOICE_VolumeDelayTmp(a0)
-        move.b	#1,FC_VOICE_VolumeDelay(a0)
+	move.b	#1,FC_VOICE_VolumeSpeedTmp(a0)
+        move.b	#1,FC_VOICE_VolumeSpeed(a0)
 
         moveq	#0,d4
         bset	d3,d4
@@ -413,27 +413,31 @@ FC_NewNote:
         move.l	a1,FC_VOICE_PatternPtr(a0)
         addi.w	#FC_SEQ_SIZE,FC_VOICE_SeqPos(a0) ; point to next sequence line
 .samepat:
+;;; ----------------------------------
+;;; Read note and portamento
+;;; ----------------------------------
         move.b	1(a1),d1		; Get info byte
         move.b	(a1)+,d0		; Get note
-        bne.s	.skip_portamento
-
-	andi.w	#%11000000,d1		; Portamento bits
-        beq.s	.noportamento
-	bra.s	.testportamento
-.skip_portamento:
+        bne.s	.clearPortamento
+	andi.w	#%11000000,d1		; Check portamento bits
+        beq.s	.noPortamento
+	bra.s	.testPortamento
+.clearPortamento:
+	;; new note clears current portamento value
         move.w	d5,FC_VOICE_Portamento(a0)
-.testportamento:
+.testPortamento:
         move.b	d5,FC_VOICE_PortamentoInfo(a0)
+	;; turn portamento on ?
         btst	#7,d1
-        beq.s	.noportamento
-        move.b	2(a1),FC_VOICE_PortamentoInfo(a0)
-.noportamento:
+        beq.s	.noPortamento
+        move.b	2(a1),FC_VOICE_PortamentoInfo(a0) ; Infobyte 2
+.noPortamento:
         andi.w	#$007f,d0
         beq.s	.nextnote
-
         move.b	d0,FC_VOICE_Note(a0)
         move.b	(a1),d1
 *        move.b	d1,FC_VOICE_NoteInfo(a0)
+;;; ----------------------------------
 
 	;; turn off channel
 	move.w	FC_VOICE_ChannelBitMask(a0),d3
@@ -448,8 +452,8 @@ FC_NewNote:
         adda.w	d1,a2				; instrument table address
 
         move.w	d5,FC_VOICE_VolumePos(a0)
-        move.b	(a2),FC_VOICE_VolumeDelayTmp(a0)
-        move.b	(a2)+,FC_VOICE_VolumeDelay(a0)
+        move.b	(a2),FC_VOICE_VolumeSpeedTmp(a0)
+        move.b	(a2)+,FC_VOICE_VolumeSpeed(a0)
 
         moveq	#0,d1
         move.b	(a2)+,d1			; Frequency table number
@@ -496,7 +500,7 @@ FC_Effects:
 	and.b	d5,d1
 	cmp.b	d5,d1
 	bne	.transpose
-	and.b	d4,d0
+	and.w	d4,d0
 	add.w	d0,d0
 	move.w	.cmds(pc,d0.w),d0
 	jmp	.cmds(pc,d0.w)
@@ -514,6 +518,9 @@ FC_Effects:
 	dc.w	.cmdE9newsample-.cmds	;E9
 	dc.w	.cmdEApitchbend-.cmds	;EA
 
+;;; ----------------------------------
+;;; Freq commands
+;;; ----------------------------------
 .cmdE0loop:
 	move.b	1(a1),d1		;loop to start of sequence + 1(a1)
         andi.w	#$003f,d1
@@ -544,7 +551,7 @@ FC_Effects:
         move.w	#$0003,FC_VOICE_SetRepeatStartAndLength(a0)
 
 	move.w	d7,FC_VOICE_VolumePos(a0)
-        move.b	#1,FC_VOICE_VolumeDelayTmp(a0)
+        move.b	#1,FC_VOICE_VolumeSpeedTmp(a0)
 
 	addq.w	#2,FC_VOICE_FreqPos(a0)
         bra	.transpose
@@ -596,7 +603,7 @@ FC_Effects:
         move.l	a4,FC_VOICE_SamplePtr(a0)
         move.l	6(a2),FC_VOICE_RepeatStart(a0)
         move.w	d7,FC_VOICE_VolumePos(a0)
-        move.b	#1,FC_VOICE_VolumeDelayTmp(a0)
+        move.b	#1,FC_VOICE_VolumeSpeedTmp(a0)
         move.w	#3,FC_VOICE_SetRepeatStartAndLength(a0)
 .nossmp:
         addq.w	#3,FC_VOICE_FreqPos(a0)
@@ -647,41 +654,43 @@ FC_VOLUfx:
         tst.b	FC_VOICE_VolumeTime(a0)
         bne.s	.do_VOLbend
 
-        subq.b	#1,FC_VOICE_VolumeDelayTmp(a0)
+        subq.b	#1,FC_VOICE_VolumeSpeedTmp(a0)
         bne.s	.calcperiod
-        move.b	FC_VOICE_VolumeDelay(a0),FC_VOICE_VolumeDelayTmp(a0)
+        move.b	FC_VOICE_VolumeSpeed(a0),FC_VOICE_VolumeSpeedTmp(a0)
 
 .volu_cmd:
         move.l	FC_VOICE_VolumePtr(a0),a1
         adda.w	FC_VOICE_VolumePos(a0),a1
         move.b	(a1),d0
 
-*testvoluend:
-        cmpi.b	#$e1,d0
-        beq.s	.calcperiod
-
-        cmpi.b	#$ea,d0
-        bne.s	.testVOLsustain
+	move.b	d0,d1
+	and.b	d5,d1
+	cmp.b	d5,d1
+	bne.s	.setvolume
+	and.w	d4,d0
+	add.w	d0,d0
+	move.w	.cmds(pc,d0.w),d0
+	jmp	.cmds(pc,d0.w)
+	
+.cmds:
+	dc.w	.cmdE0volumeLoop-.cmds 		;E0
+	dc.w	.calcperiod-.cmds      		;E1 - volume end
+	dc.w	0
+	dc.w	0
+	dc.w	0
+	dc.w	0
+	dc.w	0
+	dc.w	0
+	dc.w	.cmdE8volumeSustain-.cmds 	;E8
+	dc.w	0
+	dc.w	.cmdEAvolumeSlide-.cmds		;EA
+	
+.cmdEAvolumeSlide:
         move.b	1(a1),FC_VOICE_VolumeStep(a0)
         move.b	2(a1),FC_VOICE_VolumeTime(a0)
         addq.w	#3,FC_VOICE_VolumePos(a0)
-        bra.s	.do_VOLbend
-.testVOLsustain:
-        cmpi.b	#$e8,d0
-        bne.s	.testVOLloop
-        addq.w	#2,FC_VOICE_VolumePos(a0)
-        move.b	1(a1),FC_VOICE_SustainVolume(a0)
-        bra.s	.calcperiod
-.testVOLloop:
-        cmpi.b	#$e0,d0
-        bne.s	.setvolume
-        move.b	1(a1),d0
-        andi.w	#$003f,d0
-        subq.b	#5,d0
-        move.w	d0,FC_VOICE_VolumePos(a0)
-        bra.s	.volu_cmd
 .do_VOLbend:
-        not.b	FC_VOICE_VolumeSwitch(a0)
+        not.b	FC_VOICE_VolumeDelay(a0)
         beq.s	.calcperiod
         subq.b	#1,FC_VOICE_VolumeTime(a0)
         move.b	FC_VOICE_VolumeStep(a0),d1
@@ -691,6 +700,19 @@ FC_VOLUfx:
         move.b	d1,FC_VOICE_VolumeTime(a0)
         move.b	d1,FC_VOICE_Volume(a0)
         bra.s	.calcperiod
+	
+.cmdE8volumeSustain:
+        addq.w	#2,FC_VOICE_VolumePos(a0)
+        move.b	1(a1),FC_VOICE_SustainVolume(a0)
+        bra.s	.calcperiod
+	
+.cmdE0volumeLoop:
+        move.b	1(a1),d0
+        andi.w	#$003f,d0
+        subq.b	#5,d0
+        move.w	d0,FC_VOICE_VolumePos(a0)
+        bra.s	.volu_cmd
+
 .setvolume:
         move.b	(a1),FC_VOICE_Volume(a0)
         addq.w	#1,FC_VOICE_VolumePos(a0)
