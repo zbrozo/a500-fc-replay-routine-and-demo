@@ -1,7 +1,7 @@
 *********************************************************
 **  Amiga FUTURE COMPOSER  »» V1.4 ««  Replay routine  **
 *********************************************************
-
+	
 ;Doesn't work with V1.0 - V1.3 modules !!
 
 ;; 	move.l $4,a6		;This little routine
@@ -98,34 +98,34 @@ INIT_MUSIC:
 FC_INIT:
         bset	#1,$bfe001
 
+	lea	FC_PlayInfo(pc),a5
+
         lea	FC_MOD_SEQ(a0),a1
-	move.l	a1,SEQpoint
+	move.l	a1,FC_PlayInfo_SEQptr(a5)
 
 	move.l	a0,a1
         add.l	FC_MOD_PAT(a0),a1
-        move.l	a1,PATpoint
+        move.l	a1,FC_PlayInfo_PATptr(a5)
 
         move.l	a0,a1
         add.l	FC_MOD_FRQ(a0),a1
-        move.l	a1,FRQpoint
+        move.l	a1,FC_PlayInfo_FRQptr(a5)
 
         move.l	a0,a1
         add.l	FC_MOD_VOL(a0),a1
-        move.l	a1,VOLpoint
+        move.l	a1,FC_PlayInfo_VOLptr(a5)
 
 	move.l	FC_MOD_SEQ_SIZE(a0),d0
-
-	lea	FC_PlayInfo(pc),a5
 
 	bsr	FC_InitSamples
 	bsr	FC_InitWaveforms
 
-	move.l	SEQpoint(pc),a0
+	move.l	FC_PlayInfo_SEQptr(a5),a0
 	bsr	FC_InitSpeed
 
         lea	FC_VoicesInfo(pc),a0
-	move.l	PATpoint(pc),a1
-	move.l	SEQpoint(pc),a2
+	move.l	FC_PlayInfo_PATptr(a5),a1
+	move.l	FC_PlayInfo_SEQptr(a5),a2
 	bsr	FC_InitVoices
 
 	rts
@@ -376,6 +376,8 @@ FC_PLAY:
 	rts
 
 ;;; ----------------------------------
+;;; in: a0 - Voice table
+;;; in: a5 - FC_PlayInfo
 FC_NewNote:
         move.l	FC_VOICE_PatternPtr(a0),a1
         adda.w	FC_VOICE_PatternPos(a0),a1
@@ -392,23 +394,22 @@ FC_NewNote:
         move.w	d5,FC_VOICE_SeqPos(a0)		; yes!
         move.l	FC_VOICE_BeginOfSeq(a0),a2	; Point to first sequence
 .notend:
-	lea	FC_PlayInfo(pc),a3
         moveq	#1,d1
-        addq.b	#1,FC_PlayInfo_ChangeSpeedCounter(a3)
-        cmpi.b	#5,FC_PlayInfo_ChangeSpeedCounter(a3)
+        addq.b	#1,FC_PlayInfo_ChangeSpeedCounter(a5)
+        cmpi.b	#5,FC_PlayInfo_ChangeSpeedCounter(a5)
         bne.s	.nonewspd
-        move.b	d1,FC_PlayInfo_ChangeSpeedCounter(a3)
+        move.b	d1,FC_PlayInfo_ChangeSpeedCounter(a5)
 
         move.b	FC_SEQ_SPEED(a2),d1		; Get new replay speed
         beq.s	.nonewspd
-        move.w	d1,FC_PlayInfo_ReplaySpeedCounter(a3)	; store in counter
-        move.w	d1,FC_PlayInfo_ReplaySpeed(a3)
+        move.w	d1,FC_PlayInfo_ReplaySpeedCounter(a5)	; store in counter
+        move.w	d1,FC_PlayInfo_ReplaySpeed(a5)
 .nonewspd:
         move.b	(a2)+,d1			;Pattern to play
         move.b	(a2)+,FC_VOICE_Transpose(a0)	;Transpose value
         move.b	(a2)+,FC_VOICE_SoundTranspose(a0)	;Soundtranspose value
         lsl.w	d6,d1
-        move.l	PATpoint(pc),a1			;Get pattern pointer
+        move.l	FC_PlayInfo_PATptr(a5),a1		;Get pattern pointer
         add.w	d1,a1
         move.l	a1,FC_VOICE_PatternPtr(a0)
         addi.w	#FC_SEQ_SIZE,FC_VOICE_SeqPos(a0) ; point to next sequence line
@@ -447,7 +448,7 @@ FC_NewNote:
         andi.w	#$003f,d1			; Max 64 instruments
         add.b	FC_VOICE_SoundTranspose(a0),d1	; add Soundtranspose
 
-        move.l	VOLpoint(pc),a2
+        move.l	FC_PlayInfo_VOLptr(a5),a2
         lsl.w	d6,d1
         adda.w	d1,a2				; instrument table address
 
@@ -464,7 +465,7 @@ FC_NewNote:
         move.b	(a2)+,FC_VOICE_VibratoDelay(a0)
         move.l	a2,FC_VOICE_VolumePtr(a0)
 
-        move.l	FRQpoint(pc),a2
+        move.l	FC_PlayInfo_FRQptr(a5),a2
         lsl.w	d6,d1
         adda.w	d1,a2
 
@@ -613,7 +614,7 @@ FC_Effects:
         moveq	#0,d0
         move.b	1(a1),d0
         lsl.w	d6,d0
-	move.l	FRQpoint(pc),a1
+	move.l	FC_PlayInfo_FRQptr(a5),a1
         adda.w	d0,a1
 
         move.l	a1,FC_VOICE_FreqPtr(a0)
@@ -655,7 +656,7 @@ FC_VOLUfx:
         bne.s	.do_VOLbend
 
         subq.b	#1,FC_VOICE_VolumeSpeedTmp(a0)
-        bne.s	.calcperiod
+        bne	.calcperiod
         move.b	FC_VOICE_VolumeSpeed(a0),FC_VOICE_VolumeSpeedTmp(a0)
 
 .volu_cmd:
@@ -855,17 +856,20 @@ FC_PlayInfo_ChannelBitMask	rs.w	1
 FC_PlayInfo_ChangeSpeedCounter	rs.w	1
 FC_PlayInfo_ReplaySpeedCounter	rs.w	1
 FC_PlayInfo_ReplaySpeed		rs.w	1
-
+FC_PlayInfo_SEQptr		rs.l	1
+FC_PlayInfo_PATptr		rs.l	1
+FC_PlayInfo_FRQptr		rs.l	1
+FC_PlayInfo_VOLptr		rs.l	1
+	
 FC_PlayInfo:
 	dc.w 0		;Channels bitmask
 	dc.w 0		;Speed
 	dc.w 0		;Replay speed counter
 	dc.w 0		;Replay speed counter temp
-
-SEQpoint: dc.l 0
-PATpoint: dc.l 0
-FRQpoint: dc.l 0
-VOLpoint: dc.l 0
+	dc.l 0		;seq
+	dc.l 0		;pat 
+	dc.l 0		;frq 
+	dc.l 0		;vol
 
 ;;; Silent instrument definition
 FC_SILENT_VOLUME: 	dc.b 1,0,0,0,0,0
@@ -887,7 +891,7 @@ FC_PERIODS:
 	dc.w $00d6,$00ca,$00be,$00b4,$00aa,$00a0,$0097,$008f,$0087,$007f,$0078,$0071 ; octave 5
 	dc.w $0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071
 	dc.w $0d60,$0ca0,$0be8,$0b40,$0a98,$0a00,$0970,$08e8,$0868,$07f0,$0780,$0714 ; octave 1
-*	dc.w $1ac0,$1940,$17d0,$1680,$1530,$1400,$12e0,$11d0,$10d0,$0fe0,$0f00,$0e28
+*	dc.w $1ac0,$1940,$17d0,$1680,$1530,$1400,$12e0,$11d0,$10d0,$0fe0,$0f00,$0e28 ; useless octave - there is period validation at the end of player
 	dc.w $06b0,$0650,$05f4,$05a0,$054c,$0500,$04b8,$0474,$0434,$03f8,$03c0,$038a
 	dc.w $0358,$0328,$02fa,$02d0,$02a6,$0280,$025c,$023a,$021a,$01fc,$01e0,$01c5
 	dc.w $01ac,$0194,$017d,$0168,$0153,$0140,$012e,$011d,$010d,$00fe,$00f0,$00e2
