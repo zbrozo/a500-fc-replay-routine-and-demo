@@ -271,6 +271,7 @@ FC_InitVoice:
 PLAY_MUSIC:
 FC_PLAY:
 	lea	FC_PlayInfo(pc),a5
+	lea 	CUSTOM,a6
 
         moveq	#0,d5			; for setting zero
         moveq	#6,d6			; for multiplying by 64
@@ -289,9 +290,7 @@ FC_PLAY:
         bsr	FC_NewNote
 
 .nonewnote:
-	move.w	#0,FC_PlayInfo_ChannelBitMask(a5)
-
-	lea 	CUSTOM,a6
+	move.w	d5,FC_PlayInfo_ChannelBitMask(a5)
 
 	lea 	FC_VoicesInfo(pc),a0
         bsr	FC_Effects
@@ -376,8 +375,11 @@ FC_PLAY:
 	rts
 
 ;;; ----------------------------------
-;;; in: a0 - Voice table
+;;; in: a0 - Current voice table
 ;;; in: a5 - FC_PlayInfo
+;;; in: a6 - CUSTOM
+;;; in: d5 - 0 value for clearing
+;;; in: d6 - 6 value for multiplying by 64 
 FC_NewNote:
         move.l	FC_VOICE_PatternPtr(a0),a1
         adda.w	FC_VOICE_PatternPos(a0),a1
@@ -478,8 +480,9 @@ FC_NewNote:
         rts
 
 ;;; ----------------------------------
-;;; in: a0 - voice data
+;;; in: a0 - Current voice table
 ;;; in: a5 - FC_PlayInfo
+;;; in: a6 - CUSTOM
 ;;; in: d6 = 6 (for multiplying by 64 - it's max length of freq table)
 FC_Effects:
 	move.b	#$f,d4		; command mask
