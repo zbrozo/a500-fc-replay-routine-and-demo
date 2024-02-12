@@ -46,8 +46,8 @@ FC_VOICE_VolumeTime	= 15		; byte
 FC_VOICE_VolumePos	= 16		; word
 FC_VOICE_FreqPtr	= 18		; long
 FC_VOICE_SoundTranspose	= 22		; byte - instrument change
-FC_VOICE_ExecSpeedTmp 	= 23		; byte	- for calculation
-FC_VOICE_ExecSpeed 	= 24		; byte
+FC_VOICE_VolumeDelayTmp	= 23		; byte	- for calculation
+FC_VOICE_VolumeDelay 	= 24		; byte
 FC_VOICE_SustainVolume	= 25		; byte
 FC_VOICE_SustainTime	= 26		; byte
 FC_VOICE_VibratoSpeed   = 27		; byte
@@ -57,9 +57,9 @@ FC_VOICE_VibratoDelay	= 30		; byte
 FC_VOICE_ChannelBitMask	= 32		; word
 FC_VOICE_PatternPtr	= 34		; long
 FC_VOICE_VolumeSwitch	= 38		; byte
-FC_VOICE_PortamentoSwitch = 39		; byte
+FC_VOICE_PortamentoDelay = 39		; byte
 FC_VOICE_PatternPos 	= 40		; word
-FC_VOICE_PortamentoSwitch2 = 42		; byte
+FC_VOICE_PitchBendDelay = 42		; byte
 FC_VOICE_FreqTranspose	= 43		; byte - transpose value for note
 FC_VOICE_Transpose	= 44		; byte - note change
 FC_VOICE_Volume		= 45		; byte
@@ -228,8 +228,8 @@ FC_InitVoice:
         move.l	#FC_SILENT_VOLUME,FC_VOICE_VolumePtr(a0)
         move.l	#FC_SILENT_FREQ,FC_VOICE_FreqPtr(a0)
         move.w	#FC_SEQ_SIZE,FC_VOICE_SeqPos(a0)
-	move.b	#1,FC_VOICE_ExecSpeedTmp(a0)
-        move.b	#1,FC_VOICE_ExecSpeed(a0)
+	move.b	#1,FC_VOICE_VolumeDelayTmp(a0)
+        move.b	#1,FC_VOICE_VolumeDelay(a0)
 
         moveq	#0,d4
         bset	d3,d4
@@ -433,7 +433,7 @@ FC_NewNote:
 
         move.b	d0,FC_VOICE_Note(a0)
         move.b	(a1),d1
-        move.b	d1,FC_VOICE_NoteInfo(a0)
+*        move.b	d1,FC_VOICE_NoteInfo(a0)
 
 	;; turn off channel
 	move.w	FC_VOICE_ChannelBitMask(a0),d3
@@ -448,8 +448,8 @@ FC_NewNote:
         adda.w	d1,a2				; instrument table address
 
         move.w	d5,FC_VOICE_VolumePos(a0)
-        move.b	(a2),FC_VOICE_ExecSpeedTmp(a0)
-        move.b	(a2)+,FC_VOICE_ExecSpeed(a0)
+        move.b	(a2),FC_VOICE_VolumeDelayTmp(a0)
+        move.b	(a2)+,FC_VOICE_VolumeDelay(a0)
 
         moveq	#0,d1
         move.b	(a2)+,d1			; Frequency table number
@@ -544,7 +544,7 @@ FC_Effects:
         move.w	#$0003,FC_VOICE_SetRepeatStartAndLength(a0)
 
 	move.w	d7,FC_VOICE_VolumePos(a0)
-        move.b	#1,FC_VOICE_ExecSpeedTmp(a0)
+        move.b	#1,FC_VOICE_VolumeDelayTmp(a0)
 
 	addq.w	#2,FC_VOICE_FreqPos(a0)
         bra	.transpose
@@ -596,7 +596,7 @@ FC_Effects:
         move.l	a4,FC_VOICE_SamplePtr(a0)
         move.l	6(a2),FC_VOICE_RepeatStart(a0)
         move.w	d7,FC_VOICE_VolumePos(a0)
-        move.b	#1,FC_VOICE_ExecSpeedTmp(a0)
+        move.b	#1,FC_VOICE_VolumeDelayTmp(a0)
         move.w	#3,FC_VOICE_SetRepeatStartAndLength(a0)
 .nossmp:
         addq.w	#3,FC_VOICE_FreqPos(a0)
@@ -647,9 +647,9 @@ FC_VOLUfx:
         tst.b	FC_VOICE_VolumeTime(a0)
         bne.s	.do_VOLbend
 
-        subq.b	#1,FC_VOICE_ExecSpeedTmp(a0)
+        subq.b	#1,FC_VOICE_VolumeDelayTmp(a0)
         bne.s	.calcperiod
-        move.b	FC_VOICE_ExecSpeed(a0),FC_VOICE_ExecSpeedTmp(a0)
+        move.b	FC_VOICE_VolumeDelay(a0),FC_VOICE_VolumeDelayTmp(a0)
 
 .volu_cmd:
         move.l	FC_VOICE_VolumePtr(a0),a1
@@ -755,7 +755,7 @@ FC_VOLUfx:
         bcs.s	.vib7
 .vib6:
         add.w	d1,d1
-        addi.b	#$18,d5
+        addi.b	#$18,d5		; 2*12 = $18 (two octaves)
         bcc.s	.vib6
 .vib7:
         add.w	d1,d0
@@ -765,25 +765,31 @@ FC_VOLUfx:
 
 ;;; ----------------------------------
 ;;; PORTAMENTO
+;;; in: d0 - period 	
 ;;; ----------------------------------
 
-        not.b	FC_VOICE_PortamentoSwitch(a0)
+        not.b	FC_VOICE_PortamentoDelay(a0)
         beq.s	.pitchbend
         moveq	#0,d1
         move.b	FC_VOICE_PortamentoInfo(a0),d1	;get portavalue
         beq.s	.pitchbend		;0=no portamento
         cmpi.b	#$1f,d1
         bls.s	.portaup
-.portadown:
         andi.w	#$1f,d1
         neg.w	d1
 .portaup:
         sub.w	d1,FC_VOICE_Portamento(a0)
+
+
+;;; ----------------------------------
+;;; PITCH BEND
+;;; ----------------------------------
+	
 .pitchbend:
-        not.b	FC_VOICE_PortamentoSwitch2(a0)
-        beq.s	.addporta
+        not.b	FC_VOICE_PitchBendDelay(a0)
+        beq.s	.addPortamento
         tst.b	FC_VOICE_PitchBendSustainTime(a0)
-        beq.s	.addporta
+        beq.s	.addPortamento
         subq.b	#1,FC_VOICE_PitchBendSustainTime(a0)
         moveq	#0,d1
         move.b	FC_VOICE_PitchBendStep(a0),d1
@@ -791,14 +797,17 @@ FC_VOLUfx:
         ext.w	d1
 .pitchup:
         sub.w	d1,FC_VOICE_Portamento(a0)
-.addporta:
+
+
+;;; ----------------------------------
+
+.addPortamento:
         add.w	FC_VOICE_Portamento(a0),d0
 
+;;; ----------------------------------
+;;; Keep period in range
+;;; ----------------------------------
 
-;;; ----------------------------------
-;;; keep period in range
-;;; ----------------------------------
-.periodinrange:
 	cmpi.w	#$0070,d0
         bhi.s	.nn1
         move.w	#$0071,d0
@@ -809,7 +818,7 @@ FC_VOLUfx:
 .nn2:
 
 ;;; ----------------------------------
-;;; prepare result
+;;; Prepare result (period and volume)
 ;;; ----------------------------------
         swap	d0
         move.b	FC_VOICE_Volume(a0),d0
