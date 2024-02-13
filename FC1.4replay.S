@@ -463,7 +463,7 @@ FC_NewNote:
         moveq	#0,d1
         move.b	(a2)+,d1			; Frequency table number
         move.b	(a2)+,FC_VOICE_VibratoSpeed(a0)
-        move.b	#$40,FC_VOICE_VibratoState(a0)
+        move.b	#0,FC_VOICE_VibratoState(a0) 	; Start vibrato in down direction
         move.b	(a2),FC_VOICE_VibratoAmp(a0)
         move.b	(a2)+,FC_VOICE_VibratoAmpTmp(a0)
         move.b	(a2)+,FC_VOICE_VibratoDelay(a0)
@@ -740,26 +740,25 @@ FC_VOLUfx:
 ;;; ----------------------------------
 ;;; VIBRATO
 ;;; ----------------------------------
-	move.b	FC_VOICE_VibratoState(a0),d7
 
 	tst.b	FC_VOICE_VibratoDelay(a0)		;Vibrato_delay = zero ?
         beq.s	.vibrator
         subq.b	#1,FC_VOICE_VibratoDelay(a0)
         bra.s	.noVibrato
 .vibrator:
-        moveq	#5,d2
         move.b	d1,d5
         move.b	FC_VOICE_VibratoAmp(a0),d4
         add.b	d4,d4	; max vibrato amplitude
         move.b	FC_VOICE_VibratoAmpTmp(a0),d1
 
-        btst	d2,d7
+	move.b	FC_VOICE_VibratoState(a0),d7
+        tst.b	d7
         bne.s	.vibUp
         sub.b	FC_VOICE_VibratoSpeed(a0),d1
         bcc.s	.vibSave
 	
 	;; change vibrato direction to up
-        bset	d2,d7
+        not.b	d7
         moveq	#0,d1
         bra.s	.vibSave
 .vibUp:
@@ -768,7 +767,7 @@ FC_VOLUfx:
         bcs.s	.vibSave
 	
 	;; change vibrato direction to down 
-        bclr	d2,d7
+        not.b	d7
         move.b	d4,d1
 .vibSave:
         move.b	d1,FC_VOICE_VibratoAmpTmp(a0)
@@ -787,10 +786,10 @@ FC_VOLUfx:
         addi.b	#$a0,d5 
         bcs.s	.vibNoDouble
 
-	moveq	#2*12,d7
+	moveq	#2*12,d7	; 2*12 = $18 (two octaves)
 .vibDoubleLoop:
         add.w	d1,d1
-        add.b	d7,d5		; 2*12 = $18 (two octaves)
+        add.b	d7,d5		; adds until 256 reached
         bcc.s	.vibDoubleLoop
 .vibNoDouble:
 	
