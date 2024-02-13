@@ -747,8 +747,9 @@ FC_VOLUfx:
         bra.s	.noVibrato
 .vibrator:
         move.b	d1,d5
-        move.b	FC_VOICE_VibratoAmp(a0),d4
-        add.b	d4,d4	; max vibrato amplitude
+	moveq	#0,d2
+        move.b	FC_VOICE_VibratoAmp(a0),d2
+        add.b	d2,d2	; max vibrato amplitude
         move.b	FC_VOICE_VibratoAmpTmp(a0),d1
 
 	move.b	FC_VOICE_VibratoState(a0),d7
@@ -763,22 +764,19 @@ FC_VOLUfx:
         bra.s	.vibSave
 .vibUp:
         add.b	FC_VOICE_VibratoSpeed(a0),d1
-        cmp.b	d4,d1
+        cmp.b	d2,d1
         bcs.s	.vibSave
 	
 	;; change vibrato direction to down 
         not.b	d7
-        move.b	d4,d1
+        move.b	d2,d1
 .vibSave:
         move.b	d1,FC_VOICE_VibratoAmpTmp(a0)
-
-        lsr.b	#1,d4
-        sub.b	d4,d1
-        bcc.s	.vibOk
-        subi.w	#$0100,d1
-.vibOk:
 	move.b	d7,FC_VOICE_VibratoState(a0)
 
+        lsr.b	#1,d2
+        sub.w	d2,d1
+	
 	;; double vibrato value for first 4 octaves in the period table
 	;; $100-$a0 = $60 and $60/2=$30
 	;; which is position after first 4 octaves in the period table
