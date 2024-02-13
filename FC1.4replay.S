@@ -292,6 +292,8 @@ FC_PLAY:
 .nonewnote:
 	move.w	d5,FC_PlayInfo_ChannelBitMask(a5)
 
+	move.b	#$e0,d3			; command mask
+
 	lea 	FC_VoicesInfo(pc),a0
         bsr	FC_Effects
         move.l	d0,AUD0PER(a6)		; period and volume
@@ -486,7 +488,6 @@ FC_NewNote:
 ;;; in: d6 = 6 (for multiplying by 64 - it's max length of freq table)
 FC_Effects:
 	move.b	#$f,d4		; command mask
-	move.b	#$e0,d5		; command mask
 	moveq	#0,d7		; for clearing
 .testsustain:
         tst.b	FC_VOICE_SustainTime(a0)	; Is sustain counter = 0
@@ -501,8 +502,8 @@ FC_Effects:
 	moveq	#0,d0
 	move.b	(a1),d0
 	move.b	d0,d1
-	and.b	d5,d1
-	cmp.b	d5,d1
+	and.b	d3,d1
+	cmp.b	d3,d1
 	bne	.transpose
 	and.w	d4,d0
 	add.w	d0,d0
@@ -668,8 +669,8 @@ FC_VOLUfx:
         move.b	(a1),d0
 
 	move.b	d0,d1
-	and.b	d5,d1
-	cmp.b	d5,d1
+	and.b	d3,d1
+	cmp.b	d3,d1
 	bne.s	.setvolume
 	and.w	d4,d0
 	add.w	d0,d0
@@ -679,14 +680,14 @@ FC_VOLUfx:
 .cmds:
 	dc.w	.cmdE0volumeLoop-.cmds 		;E0
 	dc.w	.calcperiod-.cmds      		;E1 - volume end
-	dc.w	0
-	dc.w	0
-	dc.w	0
-	dc.w	0
-	dc.w	0
-	dc.w	0
+	dc.w	.calcperiod-.cmds		;not used
+	dc.w	.calcperiod-.cmds		;not used
+	dc.w	.calcperiod-.cmds		;not used
+	dc.w	.calcperiod-.cmds		;not used
+	dc.w	.calcperiod-.cmds		;not used
+	dc.w	.calcperiod-.cmds		;not used
 	dc.w	.cmdE8volumeSustain-.cmds 	;E8
-	dc.w	0
+	dc.w	.calcperiod-.cmds		;not used
 	dc.w	.cmdEAvolumeSlide-.cmds		;EA
 	
 .cmdEAvolumeSlide:
@@ -744,50 +745,57 @@ FC_VOLUfx:
 	tst.b	FC_VOICE_VibratoDelay(a0)		;Vibrato_delay = zero ?
         beq.s	.vibrator
         subq.b	#1,FC_VOICE_VibratoDelay(a0)
-        bra.s	.novibrato
+        bra.s	.noVibrato
 .vibrator:
         moveq	#5,d2
         move.b	d1,d5
         move.b	FC_VOICE_VibratoAmp(a0),d4
-        add.b	d4,d4
+        add.b	d4,d4	; max vibrato amplitude
         move.b	FC_VOICE_VibratoAmpTmp(a0),d1
-        tst.b	d7
-        bpl.s	.vib1
-        btst	#0,d7
-        bne.s	.vib4
-.vib1:
+
         btst	d2,d7
-        bne.s	.vib2
+        bne.s	.vibUp
         sub.b	FC_VOICE_VibratoSpeed(a0),d1
-        bcc.s	.vib3
+        bcc.s	.vibSave
+	
+	;; change vibrato direction to up
         bset	d2,d7
         moveq	#0,d1
-        bra.s	.vib3
-.vib2:
+        bra.s	.vibSave
+.vibUp:
         add.b	FC_VOICE_VibratoSpeed(a0),d1
         cmp.b	d4,d1
-        bcs.s	.vib3
+        bcs.s	.vibSave
+	
+	;; change vibrato direction to down 
         bclr	d2,d7
         move.b	d4,d1
-.vib3:
+.vibSave:
         move.b	d1,FC_VOICE_VibratoAmpTmp(a0)
-.vib4:
+
         lsr.b	#1,d4
         sub.b	d4,d1
-        bcc.s	.vib5
+        bcc.s	.vibOk
         subi.w	#$0100,d1
-.vib5:
-        addi.b	#$a0,d5
-        bcs.s	.vib7
-.vib6:
-        add.w	d1,d1
-        addi.b	#$18,d5		; 2*12 = $18 (two octaves)
-        bcc.s	.vib6
-.vib7:
-        add.w	d1,d0
-.novibrato:
-        eori.b	#$01,d7
+.vibOk:
 	move.b	d7,FC_VOICE_VibratoState(a0)
+
+	;; double vibrato value for first 4 octaves in the period table
+	;; $100-$a0 = $60 and $60/2=$30
+	;; which is position after first 4 octaves in the period table
+	
+        addi.b	#$a0,d5 
+        bcs.s	.vibNoDouble
+
+	moveq	#2*12,d7
+.vibDoubleLoop:
+        add.w	d1,d1
+        add.b	d7,d5		; 2*12 = $18 (two octaves)
+        bcc.s	.vibDoubleLoop
+.vibNoDouble:
+	
+        add.w	d1,d0
+.noVibrato:
 
 ;;; ----------------------------------
 ;;; PORTAMENTO
