@@ -292,11 +292,12 @@ FC_PLAY:
 .nonewnote:
 	move.w	d5,FC_PlayInfo_ChannelBitMask(a5)
 
-	move.b	#$e0,d3			; command mask
+	moveq	#$e0,d3		; command mask
+	moveq	#$f,d4		; command mask
 
 	lea 	FC_VoicesInfo(pc),a0
         bsr	FC_Effects
-        move.l	d0,AUD0PER(a6)		; period and volume
+        move.l	d0,AUD0PER(a6)		; set period and volume
 
 	lea	FC_VOICE_SIZE(a0),a0
         bsr	FC_Effects
@@ -487,7 +488,6 @@ FC_NewNote:
 ;;; in: a6 - CUSTOM
 ;;; in: d6 = 6 (for multiplying by 64 - it's max length of freq table)
 FC_Effects:
-	move.b	#$f,d4		; command mask
 	moveq	#0,d7		; for clearing
 .testsustain:
         tst.b	FC_VOICE_SustainTime(a0)	; Is sustain counter = 0
@@ -729,12 +729,12 @@ FC_VOLUfx:
         add.b	FC_VOICE_Transpose(a0),d0
 .lockednote:
         moveq	#$7f,d1
-        and.l	d1,d0
-        lea	FC_PERIODS(pc),a1
-
+        and.w	d1,d0
 	add.w	d0,d0
         move.w	d0,d1
-        adda.w	d0,a1
+
+        lea	FC_PERIODS(pc),a1
+	adda.w	d0,a1
         move.w	(a1),d0
 
 ;;; ----------------------------------
