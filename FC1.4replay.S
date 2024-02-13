@@ -72,7 +72,7 @@ FC_VOICE_ChannelDMABase	= 60		; long
 FC_VOICE_RepeatStart 	= 64		; word
 FC_VOICE_RepeatLength 	= 66		; word
 FC_VOICE_SamplePtr 	= 68		; long
-FC_VOICE_SetRepeatStartAndLength = 72	; word
+FC_VOICE_RepeatStartAndLengthDelay = 72	; word
 FC_VOICE_SIZE		= 74
 
 FC_SEQ_SPEED		= 12		; offset to speed in sequence
@@ -292,7 +292,7 @@ FC_PLAY:
 .nonewnote:
 	move.w	d5,FC_PlayInfo_ChannelBitMask(a5)
 
-	moveq	#$e0,d3		; command mask
+	move.b	#$e0,d3		; command mask
 	moveq	#$f,d4		; command mask
 
 	lea 	FC_VoicesInfo(pc),a0
@@ -334,7 +334,7 @@ FC_PLAY:
         moveq 	#2,d0
         moveq	#0,d5
 .chan1:
-	lea	(FC_VoicesInfo+FC_VOICE_SetRepeatStartAndLength)(pc),a0
+	lea	(FC_VoicesInfo+FC_VOICE_RepeatStartAndLengthDelay)(pc),a0
         move.w	(a0),d7
         beq.s	.chan2
         subq.w	#1,(a0)
@@ -553,7 +553,7 @@ FC_Effects:
         move.l	d1,FC_VOICE_SamplePtr(a0)
         move.w	(a4)+,4(a3)			; sample length
         move.l	(a4),FC_VOICE_RepeatStart(a0) 	; save repeat start and length
-        move.w	#$0003,FC_VOICE_SetRepeatStartAndLength(a0)
+        move.w	#3,FC_VOICE_RepeatStartAndLengthDelay(a0)
 
 	move.w	d7,FC_VOICE_VolumePos(a0)
         move.b	#1,FC_VOICE_VolumeSpeedTmp(a0)
@@ -574,7 +574,7 @@ FC_Effects:
         move.l	d1,FC_VOICE_SamplePtr(a0)
         move.w	(a4)+,4(a3)			; sample length
         move.l	(a4),FC_VOICE_RepeatStart(a0)	; save repeat start and length
-        move.w	#$0003,FC_VOICE_SetRepeatStartAndLength(a0)
+        move.w	#3,FC_VOICE_RepeatStartAndLengthDelay(a0)
 
         addq.w	#2,FC_VOICE_FreqPos(a0)
         bra	.transpose
@@ -609,7 +609,7 @@ FC_Effects:
         move.l	6(a2),FC_VOICE_RepeatStart(a0)
         move.w	d7,FC_VOICE_VolumePos(a0)
         move.b	#1,FC_VOICE_VolumeSpeedTmp(a0)
-        move.w	#3,FC_VOICE_SetRepeatStartAndLength(a0)
+        move.w	#3,FC_VOICE_RepeatStartAndLengthDelay(a0)
 .nossmp:
         addq.w	#3,FC_VOICE_FreqPos(a0)
         bra.s	.transpose
