@@ -292,8 +292,7 @@ FC_PLAY:
 .nonewnote:
 	move.w	d5,FC_PlayInfo_ChannelBitMask(a5)
 
-	move.b	#$e0,d3		; command mask
-	moveq	#$f,d4		; command mask
+	move.l	#$00f000e0,d3	; command masks
 
 	lea 	FC_VoicesInfo(pc),a0
         bsr	FC_Effects
@@ -502,10 +501,12 @@ FC_Effects:
 	moveq	#0,d0
 	move.b	(a1),d0
 	move.b	d0,d1
+	swap	d3
 	and.b	d3,d1
+	swap	d3
 	cmp.b	d3,d1
 	bne	.transpose
-	and.w	d4,d0
+	sub.b	d3,d0
 	add.w	d0,d0
 	move.w	.cmds(pc,d0.w),d0
 	jmp	.cmds(pc,d0.w)
@@ -666,13 +667,16 @@ FC_VOLUfx:
 .volu_cmd:
         move.l	FC_VOICE_VolumePtr(a0),a1
         adda.w	FC_VOICE_VolumePos(a0),a1
-        move.b	(a1),d0
 
+	moveq	#0,d0
+        move.b	(a1),d0
 	move.b	d0,d1
+	swap	d3
 	and.b	d3,d1
+	swap	d3
 	cmp.b	d3,d1
 	bne.s	.setvolume
-	and.w	d4,d0
+	sub.b	d3,d0
 	add.w	d0,d0
 	move.w	.cmds(pc,d0.w),d0
 	jmp	.cmds(pc,d0.w)
@@ -716,11 +720,13 @@ FC_VOLUfx:
         andi.w	#$003f,d0
         subq.b	#5,d0
         move.w	d0,FC_VOICE_VolumePos(a0)
-        bra.s	.volu_cmd
+        bra	.volu_cmd
 
 .setvolume:
+	
         move.b	(a1),FC_VOICE_Volume(a0)
         addq.w	#1,FC_VOICE_VolumePos(a0)
+	
 .calcperiod:
         move.b	FC_VOICE_FreqTranspose(a0),d0
         bmi.s	.lockednote
