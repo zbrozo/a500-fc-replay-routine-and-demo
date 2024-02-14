@@ -292,7 +292,7 @@ FC_PLAY:
 .nonewnote:
 	move.w	d5,FC_PlayInfo_ChannelBitMask(a5)
 
-	move.l	#$00f000e0,d3	; command masks
+	move.l	#$00f000e0,d3	; command masks ($f0 and $e0)
 
 	lea 	FC_VoicesInfo(pc),a0
         bsr	FC_Effects
@@ -533,7 +533,7 @@ FC_Effects:
         move.w	d1,FC_VOICE_FreqPos(a0)
         move.l	FC_VOICE_FreqPtr(a0),a1
         adda.w	d1,a1
-	bra	.testeffects
+	bra.s	.testeffects
 
 .cmdE2newsound:
 	;; turn off channel
@@ -677,22 +677,22 @@ FC_VOLUfx:
 	cmp.b	d3,d1
 	bne.s	.setvolume
 	sub.b	d3,d0
-	add.w	d0,d0
-	move.w	.cmds(pc,d0.w),d0
+	move.b	.cmds(pc,d0.w),d0
 	jmp	.cmds(pc,d0.w)
 	
 .cmds:
-	dc.w	.cmdE0volumeLoop-.cmds 		;E0
-	dc.w	.calcperiod-.cmds      		;E1 - volume end
-	dc.w	.calcperiod-.cmds		;not used
-	dc.w	.calcperiod-.cmds		;not used
-	dc.w	.calcperiod-.cmds		;not used
-	dc.w	.calcperiod-.cmds		;not used
-	dc.w	.calcperiod-.cmds		;not used
-	dc.w	.calcperiod-.cmds		;not used
-	dc.w	.cmdE8volumeSustain-.cmds 	;E8
-	dc.w	.calcperiod-.cmds		;not used
-	dc.w	.cmdEAvolumeSlide-.cmds		;EA
+	dc.b	.cmdE0volumeLoop-.cmds 		;E0
+	dc.b	.calcperiod-.cmds      		;E1 - volume end
+	dc.b	.calcperiod-.cmds		;not used
+	dc.b	.calcperiod-.cmds		;not used
+	dc.b	.calcperiod-.cmds		;not used
+	dc.b	.calcperiod-.cmds		;not used
+	dc.b	.calcperiod-.cmds		;not used
+	dc.b	.calcperiod-.cmds		;not used
+	dc.b	.cmdE8volumeSustain-.cmds 	;E8
+	dc.b	.calcperiod-.cmds		;not used
+	dc.b	.cmdEAvolumeSlide-.cmds		;EA
+	EVEN
 	
 .cmdEAvolumeSlide:
         move.b	1(a1),FC_VOICE_VolumeStep(a0)
@@ -720,7 +720,7 @@ FC_VOLUfx:
         andi.w	#$003f,d0
         subq.b	#5,d0
         move.w	d0,FC_VOICE_VolumePos(a0)
-        bra	.volu_cmd
+        bra.s	.volu_cmd
 
 .setvolume:
 	
