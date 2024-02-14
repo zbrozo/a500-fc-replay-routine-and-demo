@@ -1,7 +1,7 @@
 *********************************************************
 **  Amiga FUTURE COMPOSER  »» V1.4 ««  Replay routine  **
 *********************************************************
-	
+
 ;Doesn't work with V1.0 - V1.3 modules !!
 
 ;; 	move.l $4,a6		;This little routine
@@ -381,7 +381,7 @@ FC_PLAY:
 ;;; in: a5 - FC_PlayInfo
 ;;; in: a6 - CUSTOM
 ;;; in: d5 - 0 value for clearing
-;;; in: d6 - 6 value for multiplying by 64 
+;;; in: d6 - 6 value for multiplying by 64
 FC_NewNote:
         move.l	FC_VOICE_PatternPtr(a0),a1
         adda.w	FC_VOICE_PatternPos(a0),a1
@@ -679,7 +679,7 @@ FC_VOLUfx:
 	sub.b	d3,d0
 	move.b	.cmds(pc,d0.w),d0
 	jmp	.cmds(pc,d0.w)
-	
+
 .cmds:
 	dc.b	.cmdE0volumeLoop-.cmds 		;E0
 	dc.b	.calcperiod-.cmds      		;E1 - volume end
@@ -693,7 +693,7 @@ FC_VOLUfx:
 	dc.b	.calcperiod-.cmds		;not used
 	dc.b	.cmdEAvolumeSlide-.cmds		;EA
 	EVEN
-	
+
 .cmdEAvolumeSlide:
         move.b	1(a1),FC_VOICE_VolumeStep(a0)
         move.b	2(a1),FC_VOICE_VolumeTime(a0)
@@ -709,12 +709,12 @@ FC_VOLUfx:
         move.b	d1,FC_VOICE_VolumeTime(a0)
         move.b	d1,FC_VOICE_Volume(a0)
         bra.s	.calcperiod
-	
+
 .cmdE8volumeSustain:
         addq.w	#2,FC_VOICE_VolumePos(a0)
         move.b	1(a1),FC_VOICE_SustainVolume(a0)
         bra.s	.calcperiod
-	
+
 .cmdE0volumeLoop:
         move.b	1(a1),d0
         andi.w	#$003f,d0
@@ -723,10 +723,10 @@ FC_VOLUfx:
         bra.s	.volu_cmd
 
 .setvolume:
-	
+
         move.b	(a1),FC_VOICE_Volume(a0)
         addq.w	#1,FC_VOICE_VolumePos(a0)
-	
+
 .calcperiod:
         move.b	FC_VOICE_FreqTranspose(a0),d0
         bmi.s	.lockednote
@@ -752,10 +752,11 @@ FC_VOLUfx:
         subq.b	#1,FC_VOICE_VibratoDelay(a0)
         bra.s	.noVibrato
 .vibrator:
-        move.b	d1,d5
+        move.b	d1,d5		; position in period table
+
 	moveq	#0,d2
         move.b	FC_VOICE_VibratoAmp(a0),d2
-        add.b	d2,d2	; max vibrato amplitude
+        add.b	d2,d2	; calc max vibrato amplitude (0, 2*amp)
         move.b	FC_VOICE_VibratoAmpTmp(a0),d1
 
 	move.b	FC_VOICE_VibratoState(a0),d7
@@ -763,7 +764,7 @@ FC_VOLUfx:
         bne.s	.vibUp
         sub.b	FC_VOICE_VibratoSpeed(a0),d1
         bcc.s	.vibSave
-	
+
 	;; change vibrato direction to up
         not.b	d7
         moveq	#0,d1
@@ -772,22 +773,22 @@ FC_VOLUfx:
         add.b	FC_VOICE_VibratoSpeed(a0),d1
         cmp.b	d2,d1
         bcs.s	.vibSave
-	
-	;; change vibrato direction to down 
+
+	;; change vibrato direction to down
         not.b	d7
         move.b	d2,d1
 .vibSave:
         move.b	d1,FC_VOICE_VibratoAmpTmp(a0)
 	move.b	d7,FC_VOICE_VibratoState(a0)
 
-        lsr.b	#1,d2
-        sub.w	d2,d1
-	
+	lsr.b	#1,d2
+	sub.w	d2,d1 ; move to (-amp, amp)
+
 	;; double vibrato value for first 4 octaves in the period table
 	;; $100-$a0 = $60 and $60/2=$30
 	;; which is position after first 4 octaves in the period table
-	
-        addi.b	#$a0,d5 
+
+        addi.b	#$a0,d5
         bcs.s	.vibNoDouble
 
 	moveq	#2*12,d7	; 2*12 = $18 (two octaves)
@@ -796,13 +797,13 @@ FC_VOLUfx:
         add.b	d7,d5		; adds until 256 reached
         bcc.s	.vibDoubleLoop
 .vibNoDouble:
-	
+
         add.w	d1,d0
 .noVibrato:
 
 ;;; ----------------------------------
 ;;; PORTAMENTO
-;;; in: d0 - period 	
+;;; in: d0 - period
 ;;; ----------------------------------
 
         not.b	FC_VOICE_PortamentoDelay(a0)
@@ -821,7 +822,7 @@ FC_VOLUfx:
 ;;; ----------------------------------
 ;;; PITCH BEND
 ;;; ----------------------------------
-	
+
 .pitchbend:
         not.b	FC_VOICE_PitchBendDelay(a0)
         beq.s	.addPortamento
@@ -874,15 +875,15 @@ FC_PlayInfo_SEQptr		rs.l	1
 FC_PlayInfo_PATptr		rs.l	1
 FC_PlayInfo_FRQptr		rs.l	1
 FC_PlayInfo_VOLptr		rs.l	1
-	
+
 FC_PlayInfo:
 	dc.w 0		;Channels bitmask
 	dc.w 0		;Speed
 	dc.w 0		;Replay speed counter
 	dc.w 0		;Replay speed counter temp
 	dc.l 0		;seq
-	dc.l 0		;pat 
-	dc.l 0		;frq 
+	dc.l 0		;pat
+	dc.l 0		;frq
 	dc.l 0		;vol
 
 ;;; Silent instrument definition
