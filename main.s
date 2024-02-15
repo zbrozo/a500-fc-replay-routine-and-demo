@@ -10,18 +10,22 @@
 	include FC1.4replay.S
 
 D_PlayerWaitRaster = $50
-D_FontQuantity = 80
-D_FontWidthInBytes = 1	
-D_FontHeight = 8
+D_FontCharsX = 20
+D_FontCharsY = 4
+D_FontQuantity = D_FontCharsX*D_FontCharsY
+D_FontWidthInBytes = 2
+D_FontHeight = 16
 D_FontBitmapWidthInBytes = 40
-D_FontBitmapHeight = 16
+D_FontBitmapHeight = D_FontHeight*4
 D_FontBitplaneSize = D_FontBitmapWidthInBytes*D_FontBitmapHeight
-D_FontBitplanes = 3
+D_FontBitplanes = 4
+	
 D_ScreenWidth = 320
 D_ScreenWidthInBytes = (D_ScreenWidth/8)
-D_ScreenHeight = 8
+D_ScreenHeight = 16
 D_ScreenBitplaneSize = D_ScreenWidthInBytes*D_ScreenHeight
-D_ScreenBitplanes = 3	
+D_ScreenBitplanes = 4	
+
 D_BackgroundColor = $000
 	
 Main:
@@ -36,19 +40,10 @@ Main:
 	bsr	InitCopper
 	bsr	InitFontPtrs
 
-	lea	Message1(pc),a1
-	bsr	GetTextLen
-	move.w	d7,-(a7)
-	lea	MessageScreen(pc),a0
-	bsr	WriteTextLine
-	
-	lea	Message2(pc),a1
+	lea	Message(pc),a1
 	bsr	GetTextLen
 	lea	MessageScreen(pc),a0
-	adda.w	(a7)+,a0
-	adda.w	#2,a0
 	bsr	WriteTextLine
-	
 	
 	lea	CUSTOM,a6
 	move.w	#$83e0,DMACON(a6)
@@ -65,9 +60,10 @@ Main:
 	move.w	PlayerMaxRasterTime(pc),d0
 	bsr	HexToDec
 
-	lea	Message1(pc),a1
+	lea	Message(pc),a1
 	bsr	GetTextLen
 	lea	MessageScreen(pc),a0
+	add.w	d7,d7		; font has 2 bytes width
 	adda.w	d7,a0
 	bsr	WriteDecValue
 	
@@ -166,7 +162,7 @@ InitCopper:
 	move.w	d0,6(a1)
 	swap	d0
 	move.w	d0,2(a1)
-	lea	D_ScreenBitplaneSize(a0),a0
+	lea	D_ScreenWidthInBytes(a0),a0
 	adda.w	#8,a1
 	dbf	d7,.l
 	rts
@@ -174,15 +170,15 @@ InitCopper:
 InitFontPtrs:	
 	lea	Font(pc),a0		
 	lea	FontPtrs(pc),a1
-	moveq	#2-1,d7
+	moveq	#4-1,d7
 .l1:
-	moveq	#D_FontBitmapWidthInBytes-1,d6
+	moveq	#D_FontBitmapWidthInBytes/D_FontWidthInBytes-1,d6
 	move.l	a0,a2
 .l2:
 	move.l	a2,(a1)+
-	adda.w	#1,a2
+	adda.w	#D_FontWidthInBytes,a2
 	dbf	d6,.l2
-	adda.w	#D_FontBitmapWidthInBytes*D_FontHeight,a0
+	adda.w	#D_FontBitmapWidthInBytes*D_FontHeight*D_FontBitplanes,a0
 	dbf	d7,.l1
 	rts
 
@@ -195,7 +191,7 @@ WriteTextLine:
 	moveq	#0,d0
 	move.b	(a1)+,d0
 	bsr.s	PutFontChar
-	adda.w	#1,a0
+	adda.w	#D_FontWidthInBytes,a0
 	dbf	d7,.l
 	rts
 
@@ -208,7 +204,7 @@ WriteDecValue:
 	add.b	#'0',d0
 	bsr.s	PutFontChar
 
-	addq.w	#1,a0
+	addq.w	#D_FontWidthInBytes,a0
 	move.b	d1,d0
 	
 	and.b	#$0f,d0
@@ -227,18 +223,11 @@ PutFontChar:
 	move.l	(a2,d0.w),a2
 
 	move.l	a0,a3
-	
-	REPT	D_FontBitplanes
-	move.b	(D_FontBitmapWidthInBytes*0)(a2),(D_ScreenWidthInBytes*0)(a3)
-	move.b	(D_FontBitmapWidthInBytes*1)(a2),(D_ScreenWidthInBytes*1)(a3)
-	move.b	(D_FontBitmapWidthInBytes*2)(a2),(D_ScreenWidthInBytes*2)(a3)
-	move.b	(D_FontBitmapWidthInBytes*3)(a2),(D_ScreenWidthInBytes*3)(a3)
-	move.b	(D_FontBitmapWidthInBytes*4)(a2),(D_ScreenWidthInBytes*4)(a3)
-	move.b	(D_FontBitmapWidthInBytes*5)(a2),(D_ScreenWidthInBytes*5)(a3)
-	move.b	(D_FontBitmapWidthInBytes*6)(a2),(D_ScreenWidthInBytes*6)(a3)
-	move.b	(D_FontBitmapWidthInBytes*7)(a2),(D_ScreenWidthInBytes*7)(a3)
-	lea	D_FontBitplaneSize(a2),a2
-	lea	D_ScreenBitplaneSize(a3),a3
+
+.nr	set 	0
+	REPT	D_FontBitplanes*D_FontHeight
+	move.w	(D_FontBitmapWidthInBytes*.nr)(a2),(D_ScreenWidthInBytes*.nr)(a3)
+.nr	set 	.nr+1
 	ENDR
 	rts
 	
@@ -272,9 +261,8 @@ HexToDec:
 ;;; **********************************************
 HexToDecTable:	dc.b	0,1,2,3,4,5,6,7,8,9,$10,$11,$12,$13,$14,$15
 	
-Message1:	dc.b	"RASTER TIME PLAYERA: ",0
-Message2:	dc.b	" RASTRàW",0
-	EVEN
+Message:	dc.b	"PLAY RASTER TIME:",0
+		EVEN
 	
 FontCodePage852:	
 	dc.b 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
@@ -308,6 +296,9 @@ FontCodePage852:
 	dc.b 08,00,00,06,00,00,00,00,00,00,00,00,00,00,00,00
 	;;   à        ã  ä
 	dc.b 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+
+BPLCON_HIRES = $8000
+BPLCON_COLOR = $200
 	
 Copper:
 	dc.w	$96,$20
@@ -325,15 +316,20 @@ Copper:
 
 	;; colors
 	dc.w	$0180,D_BackgroundColor
-	dc.w	$0182,$0400,$0184,$0a50,$0186,$0b70
-	dc.w	$0188,$0c90,$018a,$0ec0,$018c,$0820,$018e,$0610
 
-	dc.w	$100,$200
+	dc.w	$0182,$0a70,$0184,$0400,$0186,$0500
+	dc.w	$0188,$0610,$018a,$0710,$018c,$0820,$018e,$0930
+	dc.w	$0190,$0a40,$0192,$0b50,$0194,$0c60,$0196,$0d80
+	dc.w	$0198,$0087,$019a,$0076,$019c,$0310,$019e,$0500
+
+	dc.w	$100,0
 
 	dc.w	D_PlayerWaitRaster*$100+7,$fffe
 	dc.w	$9c,$8010		; int request
 	
 	dc.w	$e007,$fffe
+	dc.w	$108,D_ScreenWidthInBytes*3
+	dc.w	$10a,D_ScreenWidthInBytes*3
 	
 CopperBitplanes:
 	dc.w	$e0,0
@@ -342,22 +338,24 @@ CopperBitplanes:
 	dc.w	$e6,0
 	dc.w	$e8,0
 	dc.w	$ea,0
+	dc.w	$ec,0
+	dc.w	$ee,0
 
-	dc.w	$100,$3200
+	dc.w	$100,BPLCON_COLOR+D_FontBitplanes*$1000
 
-	dc.w	$e807,$fffe
+	dc.w	$f007,$fffe
 
-	dc.w	$100,$200
+	dc.w	$100,0
 	
 	dc.w	$ffdf,$fffe		;allow VPOS>$ff
 	dc.w	$ffff,$fffe		;magic value to end copperlist
 
-Module:
-	incbin	ice2
 Font:
-	incbin	font8x8.raw
+	incbin	font.raw
 FontPtrs:
 	ds.l	D_FontQuantity
 MessageScreen:
-	ds.b	D_FontBitplaneSize*D_ScreenBitplanes
+	ds.b	D_ScreenBitplaneSize*D_ScreenBitplanes
 
+Module:
+	incbin ice2	
