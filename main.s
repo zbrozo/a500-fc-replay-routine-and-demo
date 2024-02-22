@@ -22,10 +22,11 @@ D_FontBitplaneSize = D_FontBitmapWidthInBytes*D_FontBitmapHeight
 	
 D_ScreenWidth = 320
 D_ScreenWidthInBytes = (D_ScreenWidth/8)
-D_ScreenHeight = 16
+D_ScreenHeight = 8*3
 D_ScreenBitplaneSize = D_ScreenWidthInBytes*D_ScreenHeight
 D_ScreenBitplanes = 3	
-D_MessageLineSize = D_ScreenWidthInBytes*D_FontHeight*D_ScreenBitplanes
+
+D_MessageLineSize = D_ScreenWidthInBytes*D_FontHeight*D_FontBitplanes
 	
 D_EqScreenHeight = 64
 D_EqScreenWidth = 320
@@ -56,6 +57,12 @@ Main:
 	lea	MessageScreen(pc),a0
 	adda.w	#D_MessageLineSize,a0
 	bsr	WriteTextLine
+
+	lea	Message3(pc),a1
+	bsr	GetTextLen
+	lea	MessageScreen(pc),a0
+	adda.w	#D_MessageLineSize*2,a0
+	bsr	WriteTextLine
 	
 	lea	CUSTOM,a6
 	move.w	#$83e0,DMACON(a6)
@@ -69,7 +76,8 @@ Main:
 	move.w	#$100,d0
 	bsr	WaitRaster
 
-	move.w	PlayerMaxRasterTime(pc),d0
+	lea	PlayerTimes(pc),a5
+	move.w	PlayerTimeMin(a5),d0
 	bsr	HexToDec
 	lea	Message1(pc),a1
 	bsr	GetTextLen
@@ -77,7 +85,7 @@ Main:
 	adda.w	d7,a0
 	bsr	WriteDecValue
 
-	move.w	PlayerRasterTime(pc),d0
+	move.w	PlayerTimeMax(a5),d0
 	bsr	HexToDec
 	lea	Message2(pc),a1
 	bsr	GetTextLen
@@ -85,6 +93,20 @@ Main:
 	adda.w	#D_MessageLineSize,a0
 	adda.w	d7,a0
 	bsr	WriteDecValue
+
+	subq.w	#1,PlayerTimeCurrDelay(a0)
+	bpl.b	.ok
+	move.w	#4,PlayerTimeCurrDelay(a0)
+	
+	move.w	PlayerTimeCurr(a5),d0
+	bsr	HexToDec
+	lea	Message3(pc),a1
+	bsr	GetTextLen
+	lea	MessageScreen(pc),a0
+	adda.w	#D_MessageLineSize*2,a0
+	adda.w	d7,a0
+	bsr	WriteDecValue
+.ok:
 	
 	bsr	Equalizer
 	bsr	PeriodEqualizer
@@ -107,18 +129,32 @@ Player:
 
 	bsr	GetRasterPosition
 	sub.w	(a7)+,d0
-	move.w	d0,PlayerRasterTime
-	lea	PlayerMaxRasterTime(pc),a0
-	move.w	(a0),d1
+
+	lea	PlayerTimes(pc),a0
+	move.w	d0,PlayerTimeCurr(a0)
+
+	move.w	PlayerTimeMin(a0),d1
 	cmp.w	d0,d1
-	bge	.ok
-	move.w	d0,(a0)
-.ok:
+	ble	.okmin
+	move.w	d0,PlayerTimeMin(a0)
+.okmin:
+	
+	move.w	PlayerTimeMax(a0),d1
+	cmp.w	d0,d1
+	bge	.okmax
+	move.w	d0,PlayerTimeMax(a0)
+.okmax:
 	rts
 
-PlayerMaxRasterTime:
+	rsreset
+PlayerTimeMin:		rs.w	1
+PlayerTimeMax:		rs.w	1
+PlayerTimeCurr:		rs.w	1
+PlayerTimeCurrDelay:	rs.w	1
+PlayerTimes:
+	dc.w	9999
 	dc.w	0
-PlayerRasterTime:
+	dc.w	0
 	dc.w	0
 	
 IntLevel3Handler:
@@ -419,8 +455,9 @@ PeriodEqualizer:
 ;;; **********************************************
 HexToDecTable:	dc.b	0,1,2,3,4,5,6,7,8,9,$10,$11,$12,$13,$14,$15
 	
-Message1:	dc.b	"MAXIMUM REPLAY RASTER TIME:",0
-Message2:	dc.b	"CURRENT REPLAY RASTER TIME:",0
+Message1:	dc.b	"MINIMUM REPLAY RASTER TIME:",0
+Message2:	dc.b	"MAXIMUM REPLAY RASTER TIME:",0
+Message3:	dc.b	"CURRENT REPLAY RASTER TIME:",0
 		EVEN
 	
 FontCodePage852:	
@@ -498,9 +535,9 @@ CopperEqualizer:
 	dc.w	D_PlayerWaitRaster*$100+7,$fffe
 	dc.w	$9c,$8010		; int request
 	
-	dc.w	$e007,$fffe
-	dc.w	$108,D_ScreenWidthInBytes*2
-	dc.w	$10a,D_ScreenWidthInBytes*2
+	dc.w	$d807,$fffe
+	dc.w	$108,D_ScreenWidthInBytes*(D_ScreenBitplanes-1)
+	dc.w	$10a,D_ScreenWidthInBytes*(D_ScreenBitplanes-1)
 	
 CopperBitplanes:
 	dc.w	$e0,0
@@ -509,8 +546,6 @@ CopperBitplanes:
 	dc.w	$e6,0
 	dc.w	$e8,0
 	dc.w	$ea,0
-	dc.w	$ec,0
-	dc.w	$ee,0
 
 	dc.w	$100,BPLCON_COLOR+D_FontBitplanes*$1000
 
