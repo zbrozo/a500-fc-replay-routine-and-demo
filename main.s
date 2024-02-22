@@ -10,22 +10,28 @@
 	include FC1.4replay.S
 
 D_PlayerWaitRaster = $50
-D_FontCharsX = 20
-D_FontCharsY = 4
+D_FontCharsX = 40
+D_FontCharsY = 2
 D_FontQuantity = D_FontCharsX*D_FontCharsY
-D_FontWidthInBytes = 2
-D_FontHeight = 16
+D_FontBitplanes = 3
+D_FontWidthInBytes = 1
+D_FontHeight = 8
 D_FontBitmapWidthInBytes = 40
-D_FontBitmapHeight = D_FontHeight*4
+D_FontBitmapHeight = D_FontHeight*D_FontBitplanes
 D_FontBitplaneSize = D_FontBitmapWidthInBytes*D_FontBitmapHeight
-D_FontBitplanes = 4
 	
 D_ScreenWidth = 320
 D_ScreenWidthInBytes = (D_ScreenWidth/8)
 D_ScreenHeight = 16
 D_ScreenBitplaneSize = D_ScreenWidthInBytes*D_ScreenHeight
-D_ScreenBitplanes = 4	
-
+D_ScreenBitplanes = 3	
+D_MessageLineSize = D_ScreenWidthInBytes*D_FontHeight*D_ScreenBitplanes
+	
+D_EqScreenHeight = 64
+D_EqScreenWidth = 320
+D_EqScreenWidthInBytes = D_EqScreenWidth/8	
+D_EqScreenSize = D_EqScreenWidthInBytes*D_EqScreenHeight
+	
 D_BackgroundColor = $000
 	
 Main:
@@ -40,9 +46,15 @@ Main:
 	bsr	InitCopper
 	bsr	InitFontPtrs
 
-	lea	Message(pc),a1
+	lea	Message1(pc),a1
 	bsr	GetTextLen
 	lea	MessageScreen(pc),a0
+	bsr	WriteTextLine
+
+	lea	Message2(pc),a1
+	bsr	GetTextLen
+	lea	MessageScreen(pc),a0
+	adda.w	#D_MessageLineSize,a0
 	bsr	WriteTextLine
 	
 	lea	CUSTOM,a6
@@ -59,13 +71,23 @@ Main:
 
 	move.w	PlayerMaxRasterTime(pc),d0
 	bsr	HexToDec
-
-	lea	Message(pc),a1
+	lea	Message1(pc),a1
 	bsr	GetTextLen
 	lea	MessageScreen(pc),a0
-	add.w	d7,d7		; font has 2 bytes width
 	adda.w	d7,a0
 	bsr	WriteDecValue
+
+	move.w	PlayerRasterTime(pc),d0
+	bsr	HexToDec
+	lea	Message2(pc),a1
+	bsr	GetTextLen
+	lea	MessageScreen(pc),a0
+	adda.w	#D_MessageLineSize,a0
+	adda.w	d7,a0
+	bsr	WriteDecValue
+	
+	bsr	Equalizer
+	bsr	PeriodEqualizer
 	
 	btst	#6,$bfe001
 	bne	.loop
@@ -85,6 +107,7 @@ Player:
 
 	bsr	GetRasterPosition
 	sub.w	(a7)+,d0
+	move.w	d0,PlayerRasterTime
 	lea	PlayerMaxRasterTime(pc),a0
 	move.w	(a0),d1
 	cmp.w	d0,d1
@@ -92,11 +115,12 @@ Player:
 	move.w	d0,(a0)
 .ok:
 	rts
-sss:	dc.w	0
 
 PlayerMaxRasterTime:
 	dc.w	0
-
+PlayerRasterTime:
+	dc.w	0
+	
 IntLevel3Handler:
 
 	movem.l	d0-a6,-(a7)
@@ -165,12 +189,26 @@ InitCopper:
 	lea	D_ScreenWidthInBytes(a0),a0
 	adda.w	#8,a1
 	dbf	d7,.l
+
+	lea	EqualizerScreen(pc),a0
+	lea	CopperEqualizer(pc),a1
+	move.l	a0,d0
+	move.w	d0,6(a1)
+	swap	d0
+	move.w	d0,2(a1)
+
+	lea	PeriodEqualizerScreen(pc),a0
+	lea	CopperPeriodEqualizer(pc),a1
+	move.l	a0,d0
+	move.w	d0,6(a1)
+	swap	d0
+	move.w	d0,2(a1)
 	rts
 	
 InitFontPtrs:	
 	lea	Font(pc),a0		
 	lea	FontPtrs(pc),a1
-	moveq	#4-1,d7
+	moveq	#D_FontCharsY-1,d7
 .l1:
 	moveq	#D_FontBitmapWidthInBytes/D_FontWidthInBytes-1,d6
 	move.l	a0,a2
@@ -226,7 +264,7 @@ PutFontChar:
 
 .nr	set 	0
 	REPT	D_FontBitplanes*D_FontHeight
-	move.w	(D_FontBitmapWidthInBytes*.nr)(a2),(D_ScreenWidthInBytes*.nr)(a3)
+	move.b	(D_FontBitmapWidthInBytes*.nr)(a2),(D_ScreenWidthInBytes*.nr)(a3)
 .nr	set 	.nr+1
 	ENDR
 	rts
@@ -257,11 +295,132 @@ HexToDec:
 	move.b	(a0,d0.w),d0
 	add.w	d1,d0
 	rts
+
+Equalizer:
+	lea	FC_VoicesInfo(pc),a0
+	lea	EqualizerScreen(pc),a1
+	lea	.channels(pc),a2
+	moveq	#4-1,d7
+.loop:
+	move.w	FC_VOICE_Note(a0),d0
+	add.w	FC_VOICE_Transpose(a0),d0
+
+	move.w	(a2),d1
+	cmp.w	d0,d1
+	beq.s	.nosound
+
+	move.w	d0,(a2)
+
+	moveq	#D_EqScreenHeight,d6
+	move.w	d6,2(a2)
+
+	move.l	a1,a3
+	move.w	d7,d0
+	add.w	d0,d0
+	adda.w	d0,a3
+
+	move.w	#$fff0,d0
+	subq.w	#1,d6
+.draw:
+	move.w	d0,(a3)
+	lea	D_EqScreenWidthInBytes(a3),a3
+	dbf	d6,.draw
+	bra.s	.ok
 	
+.nosound:
+	moveq	#0,d1
+	move.w	2(a2),d1
+	beq.s	.ok
+
+	move.l	a1,a3
+	move.w	d7,d0
+	add.w	d0,d0
+	adda.w	d0,a3
+
+	moveq	#D_EqScreenHeight,d2
+	sub.b	d1,d2
+	mulu	#D_EqScreenWidthInBytes,d2
+	adda.w	d2,a3
+	
+	move.w	#0,(a3)
+	subq.w	#1,d1
+	move.w	d1,2(a2)
+	
+.ok:
+	lea	FC_VOICE_SIZE(a0),a0
+	addq.w	#4,a2
+	dbf	d7,.loop
+	rts
+
+.channels:
+	;; note value, eq height
+	dc.w	0,0
+	dc.w	0,0
+	dc.w	0,0
+	dc.w	0,0
+
+
+PeriodEqualizer:
+	lea	PeriodEqualizerScreen(pc),a1
+	lea	.periods(pc),a2
+
+	move.w	#D_EqScreenHeight,d4
+	moveq	#0,d5
+	
+	moveq	#39,d7
+.fall:
+	moveq	#0,d0
+	move.b	(a2),d0
+	beq.s	.nofall
+	subq.b	#1,(a2)
+
+	move.w	d4,d1
+	sub.w	d0,d1
+
+	mulu	#40,d1
+	move.b	d5,(a1,d1.w)
+.nofall:
+	addq.w	#1,a1
+	addq.w	#1,a2
+	dbf	d7,.fall
+	
+	lea	FC_VoicesInfo(pc),a0
+	lea	PeriodEqualizerScreen(pc),a1
+	lea	.periods(pc),a2
+	moveq	#4-1,d7
+.channel:
+	tst.b	FC_VOICE_Volume(a0)
+	beq.s	.skip
+
+ 	move.w	FC_VOICE_Period(a0),d0
+ 	beq.s	.skip
+ 	sub.w	#FC_PERIOD_MIN,d0
+	
+ 	mulu	#40,d0
+ 	divu	#FC_PERIOD_MAX-FC_PERIOD_MIN,d0
+	
+	move.b	d4,(a2,d0.w)
+
+ 	move.w	#D_EqScreenHeight-1,d6
+	move.l	a1,a3
+	adda.w	d0,a3
+.draw:
+ 	move.b	#$fe,(a3)
+ 	lea	D_EqScreenWidthInBytes(a3),a3
+ 	dbf	d6,.draw
+.skip:
+	lea	FC_VOICE_SIZE(a0),a0
+	dbf	d7,.channel
+	rts
+	
+.periods:
+	blk.b	40,0
+
 ;;; **********************************************
 HexToDecTable:	dc.b	0,1,2,3,4,5,6,7,8,9,$10,$11,$12,$13,$14,$15
 	
-Message:	dc.b	"PLAY RASTER TIME:",0
+Message1:	dc.b	"MAXIMUM REPLAY RASTER TIME:",0
+Message2:	dc.b	"CURRENT REPLAY RASTER TIME:",0
 		EVEN
 	
 FontCodePage852:	
@@ -314,13 +473,25 @@ Copper:
 	dc.w	$10a,0
 	dc.w	$102,0			;Scroll register (and playfield pri)
 
-	;; colors
+	dc.w	$180,0
+	
+	dc.w	$3007,$fffe
+CopperEqualizer:	
+	dc.w	$e0,0
+	dc.w	$e2,0
+	dc.w	$100,$1200
+	dc.w	$182,$fff
+	dc.w	$7007,$fffe
+	
 	dc.w	$0180,D_BackgroundColor
 
-	dc.w	$0182,$0a70,$0184,$0400,$0186,$0500
-	dc.w	$0188,$0610,$018a,$0710,$018c,$0820,$018e,$0930
-	dc.w	$0190,$0a40,$0192,$0b50,$0194,$0c60,$0196,$0d80
-	dc.w	$0198,$0087,$019a,$0076,$019c,$0310,$019e,$0500
+	dc.w 	$0182,$0fd3,$0184,$0f92,$0186,$0e72
+	dc.w 	$0188,$0c50,$018a,$0a41,$018c,$0930,$018e,$0720
+	
+	*dc.w	$0182,$0a70,$0184,$0400,$0186,$0500
+	*dc.w	$0188,$0610,$018a,$0710,$018c,$0820,$018e,$0930
+	*dc.w	$0190,$0a40,$0192,$0b50,$0194,$0c60,$0196,$0d80
+	*dc.w	$0198,$0087,$019a,$0076,$019c,$0310,$019e,$0500
 
 	dc.w	$100,0
 
@@ -328,8 +499,8 @@ Copper:
 	dc.w	$9c,$8010		; int request
 	
 	dc.w	$e007,$fffe
-	dc.w	$108,D_ScreenWidthInBytes*3
-	dc.w	$10a,D_ScreenWidthInBytes*3
+	dc.w	$108,D_ScreenWidthInBytes*2
+	dc.w	$10a,D_ScreenWidthInBytes*2
 	
 CopperBitplanes:
 	dc.w	$e0,0
@@ -345,17 +516,29 @@ CopperBitplanes:
 
 	dc.w	$f007,$fffe
 
-	dc.w	$100,0
-	
+	dc.w	$108,0
+	dc.w	$10a,0
+
+CopperPeriodEqualizer:	
+	dc.w	$e0,0
+	dc.w	$e2,0
+	dc.w	$100,$1200
+	dc.w	$182,$fff
 	dc.w	$ffdf,$fffe		;allow VPOS>$ff
+	dc.w	$3007,$fffe
+	dc.w	$100,0
 	dc.w	$ffff,$fffe		;magic value to end copperlist
 
 Font:
-	incbin	font.raw
+	incbin	font1x1x3.rawblit
 FontPtrs:
 	ds.l	D_FontQuantity
 MessageScreen:
 	ds.b	D_ScreenBitplaneSize*D_ScreenBitplanes
-
+EqualizerScreen:
+	ds.b	D_EqScreenSize
+PeriodEqualizerScreen:
+	ds.b	D_EqScreenSize
+	
 Module:
 	incbin ice2	

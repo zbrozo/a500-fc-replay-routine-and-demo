@@ -73,7 +73,8 @@ FC_VOICE_RepeatStart 	= 64		; word
 FC_VOICE_RepeatLength 	= 66		; word
 FC_VOICE_SamplePtr 	= 68		; long
 FC_VOICE_RepeatStartAndLengthDelay = 72	; word
-FC_VOICE_SIZE		= 74
+FC_VOICE_Period 	= 74
+FC_VOICE_SIZE		= 76
 
 FC_SEQ_SPEED		= 12		; offset to speed in sequence
 FC_SEQ_SIZE		= 13		; sequence size
@@ -81,6 +82,9 @@ FC_SEQ_SIZE		= 13		; sequence size
 FC_PAT_END		= $49
 FC_PAT_SIZE		= 64
 
+FC_PERIOD_MAX		= $d60
+FC_PERIOD_MIN		= $71	
+	
 END_MUSIC:
 FC_END:
 	;; clear periods and volumes
@@ -705,9 +709,9 @@ FC_VOLUfx:
         move.b	FC_VOICE_VolumeStep(a0),d1
         add.b	d1,FC_VOICE_Volume(a0)
         bpl.s	.calcperiod
-        moveq	#0,d1
-        move.b	d1,FC_VOICE_VolumeTime(a0)
-        move.b	d1,FC_VOICE_Volume(a0)
+	;; clear volume
+        move.b	d7,FC_VOICE_VolumeTime(a0)	
+        move.b	d7,FC_VOICE_Volume(a0)
         bra.s	.calcperiod
 
 .cmdE8volumeSustain:
@@ -858,6 +862,9 @@ FC_VOLUfx:
 ;;; ----------------------------------
 ;;; Prepare result (period and volume)
 ;;; ----------------------------------
+
+	move.w	d0,FC_VOICE_Period(a0) ; save period for usage in equalizer
+	
         swap	d0
         move.b	FC_VOICE_Volume(a0),d0
 	rts
