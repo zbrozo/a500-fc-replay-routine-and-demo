@@ -1,7 +1,7 @@
 *********************************************************
 **  Amiga FUTURE COMPOSER  »» V1.4 ««  Replay routine  **
 *********************************************************
-** refactored by Bishop/Turnips 2023-2024
+** refactored and optimized by Bishop/Turnips 2023-2024
 	
 ;Doesn't work with V1.0 - V1.3 modules !!
 
@@ -813,7 +813,7 @@ FC_VOLUfx:
 
         not.b	FC_VOICE_PortamentoDelay(a0)
 	beq.s	.addPortamento
-*       beq.s	.pitchbend
+
         moveq	#0,d1
         move.b	FC_VOICE_PortamentoInfo(a0),d1	;get portavalue
         beq.s	.pitchbend		;0=no portamento
@@ -829,8 +829,6 @@ FC_VOLUfx:
 ;;; ----------------------------------
 
 .pitchbend:
-        *not.b	FC_VOICE_PitchBendDelay(a0)
-        *beq.s	.addPortamento
         tst.b	FC_VOICE_PitchBendSustainTime(a0)
         beq.s	.addPortamento
         subq.b	#1,FC_VOICE_PitchBendSustainTime(a0)
@@ -840,7 +838,6 @@ FC_VOLUfx:
         ext.w	d1
 .pitchup:
         sub.w	d1,FC_VOICE_Portamento(a0)
-
 
 ;;; ----------------------------------
 
