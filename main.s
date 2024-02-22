@@ -1,4 +1,7 @@
 ;;; -*- coding: cp852 -*-
+;;; Example demo with refactored FutureComposer1.4 replay routine and equalizers
+;;; Coded by Bishop/Turnips 2024
+
 	incdir ZPRJ:fc/
 
 	section main,code_c
@@ -46,7 +49,8 @@ Main:
 
 	bsr	InitCopper
 	bsr	InitFontPtrs
-
+	bsr	ClearScreens
+	
 	lea	Message1(pc),a1
 	bsr	GetTextLen
 	lea	MessageScreen(pc),a0
@@ -152,7 +156,7 @@ PlayerTimeMax:		rs.w	1
 PlayerTimeCurr:		rs.w	1
 PlayerTimeCurrDelay:	rs.w	1
 PlayerTimes:
-	dc.w	9999
+	dc.w	99
 	dc.w	0
 	dc.w	0
 	dc.w	0
@@ -336,7 +340,7 @@ Equalizer:
 	lea	FC_VoicesInfo(pc),a0
 	lea	EqualizerScreen(pc),a1
 	lea	.channels(pc),a2
-	moveq	#4-1,d7
+	moveq	#FC_CHANNELS_NR-1,d7
 .loop:
 	move.w	FC_VOICE_Note(a0),d0
 	add.w	FC_VOICE_Transpose(a0),d0
@@ -395,35 +399,14 @@ Equalizer:
 	dc.w	0,0
 	dc.w	0,0
 
-
+D_EQ_PERIODS = 40
 PeriodEqualizer:
-	lea	PeriodEqualizerScreen(pc),a1
-	lea	.periods(pc),a2
+	bsr.s	PeriodEqualizerDecrease
 
-	move.w	#D_EqScreenHeight,d4
-	moveq	#0,d5
-	
-	moveq	#39,d7
-.fall:
-	moveq	#0,d0
-	move.b	(a2),d0
-	beq.s	.nofall
-	subq.b	#1,(a2)
-
-	move.w	d4,d1
-	sub.w	d0,d1
-
-	mulu	#40,d1
-	move.b	d5,(a1,d1.w)
-.nofall:
-	addq.w	#1,a1
-	addq.w	#1,a2
-	dbf	d7,.fall
-	
 	lea	FC_VoicesInfo(pc),a0
 	lea	PeriodEqualizerScreen(pc),a1
-	lea	.periods(pc),a2
-	moveq	#4-1,d7
+	lea	PeriodsActivated(pc),a2
+	moveq	#FC_CHANNELS_NR-1,d7
 .channel:
 	tst.b	FC_VOICE_Volume(a0)
 	beq.s	.skip
@@ -432,7 +415,7 @@ PeriodEqualizer:
  	beq.s	.skip
  	sub.w	#FC_PERIOD_MIN,d0
 	
- 	mulu	#40,d0
+ 	mulu	#D_EQ_PERIODS,d0
  	divu	#FC_PERIOD_MAX-FC_PERIOD_MIN,d0
 	
 	move.b	d4,(a2,d0.w)
@@ -449,9 +432,57 @@ PeriodEqualizer:
 	dbf	d7,.channel
 	rts
 	
-.periods:
-	blk.b	40,0
+PeriodEqualizerDecrease:	
+	lea	PeriodEqualizerScreen(pc),a1
+	lea	PeriodsActivated(pc),a2
+	move.w	#D_EqScreenHeight,d4
+	moveq	#0,d5
+	moveq	#D_EQ_PERIODS-1,d7
+.loop:
+	moveq	#0,d0
+	move.b	(a2),d0
+	beq.s	.next
+	subq.b	#1,(a2)
 
+	move.w	d4,d1
+	sub.w	d0,d1
+
+	mulu	#D_EqScreenWidthInBytes,d1
+	move.b	d5,(a1,d1.w)
+.next:
+	addq.w	#1,a1
+	addq.w	#1,a2
+	dbf	d7,.loop
+	rts
+	
+PeriodsActivated:
+	blk.b	D_EQ_PERIODS,0
+
+ClearScreens:
+
+	lea	PeriodEqualizerScreen(pc),a0
+	move.w	#D_EqScreenSize-1,d7
+	moveq	#0,d0
+.l1:
+	move.b	d0,(a0)+
+	dbf	d7,.l1
+
+	lea	EqualizerScreen(pc),a0
+	move.w	#D_EqScreenSize-1,d7
+	moveq	#0,d0
+.l2:
+	move.b	d0,(a0)+
+	dbf	d7,.l2
+
+	lea	MessageScreen(pc),a0
+	move.w	#D_ScreenBitplaneSize*D_ScreenBitplanes-1,d7
+	moveq	#0,d0
+.l3:
+	move.b	d0,(a0)+
+	dbf	d7,.l3
+	
+	rts
+	
 ;;; **********************************************
 HexToDecTable:	dc.b	0,1,2,3,4,5,6,7,8,9,$10,$11,$12,$13,$14,$15
 	
@@ -525,11 +556,6 @@ CopperEqualizer:
 	dc.w 	$0182,$0fd3,$0184,$0f92,$0186,$0e72
 	dc.w 	$0188,$0c50,$018a,$0a41,$018c,$0930,$018e,$0720
 	
-	*dc.w	$0182,$0a70,$0184,$0400,$0186,$0500
-	*dc.w	$0188,$0610,$018a,$0710,$018c,$0820,$018e,$0930
-	*dc.w	$0190,$0a40,$0192,$0b50,$0194,$0c60,$0196,$0d80
-	*dc.w	$0198,$0087,$019a,$0076,$019c,$0310,$019e,$0500
-
 	dc.w	$100,0
 
 	dc.w	D_PlayerWaitRaster*$100+7,$fffe
