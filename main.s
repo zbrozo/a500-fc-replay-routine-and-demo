@@ -1,6 +1,7 @@
 ;;; -*- coding: cp852 -*-
-;;; Example demo with refactored FutureComposer1.4 replay routine and equalizers
-;;; Coded by Bishop/Turnips 2024
+;;; Demo with refactored FutureComposer1.4 replay routine and equalizers
+;;; Coded by Zbro¾o aka Bishop/Turnips 2024
+;;;-------------------------------------------------------------------
 
 	incdir ZPRJ:fc/
 
@@ -35,8 +36,10 @@ D_EqScreenHeight = 64
 D_EqScreenWidth = 320
 D_EqScreenWidthInBytes = D_EqScreenWidth/8	
 D_EqScreenSize = D_EqScreenWidthInBytes*D_EqScreenHeight
+D_EqFreqs = 40
 	
 D_BackgroundColor = $000
+
 	
 Main:
 	bsr	Start
@@ -74,7 +77,6 @@ Main:
 
 	lea	Copper(pc),a0
 	move.l	a0,COP1LCH(a6)
-	
 .loop:
 
 	move.w	#$100,d0
@@ -112,8 +114,8 @@ Main:
 	bsr	WriteDecValue
 .ok:
 	
-	bsr	Equalizer
-	bsr	PeriodEqualizer
+	bsr	ChannelsEqualizer
+	bsr	FreqsEqualizer
 	
 	btst	#6,$bfe001
 	bne	.loop
@@ -230,15 +232,15 @@ InitCopper:
 	adda.w	#8,a1
 	dbf	d7,.l
 
-	lea	EqualizerScreen(pc),a0
-	lea	CopperEqualizer(pc),a1
+	lea	ChannelsEqualizerScreen(pc),a0
+	lea	CopperChannelsEqualizer(pc),a1
 	move.l	a0,d0
 	move.w	d0,6(a1)
 	swap	d0
 	move.w	d0,2(a1)
 
-	lea	PeriodEqualizerScreen(pc),a0
-	lea	CopperPeriodEqualizer(pc),a1
+	lea	FreqsEqualizerScreen(pc),a0
+	lea	CopperFreqsEqualizer(pc),a1
 	move.l	a0,d0
 	move.w	d0,6(a1)
 	swap	d0
@@ -336,78 +338,77 @@ HexToDec:
 	add.w	d1,d0
 	rts
 
-Equalizer:
+ChannelsEqualizer:
 	lea	FC_VoicesInfo(pc),a0
-	lea	EqualizerScreen(pc),a1
-	lea	.channels(pc),a2
-	moveq	#FC_CHANNELS_NR-1,d7
+	lea	ChannelsEqualizerScreen(pc),a1
+	lea	ChannelsEqualizerValues(pc),a2
+	lea	FC_PlayInfo(pc),a3
+	moveq	#0,d6
+	moveq	#FC_CHANNELS-1,d7
 .loop:
-	move.w	FC_VOICE_Note(a0),d0
-	add.w	FC_VOICE_Transpose(a0),d0
 
-	move.w	(a2),d1
-	cmp.w	d0,d1
+	move.w	FC_PlayInfo_ChannelBitMask(a3),d1
+	btst	d6,d1
 	beq.s	.nosound
+	
+	move.w	FC_VOICE_RepeatStartAndLengthDelay(a0),d1
+	beq.s	.nosound
+	
+	moveq	#D_EqScreenHeight,d1
+	move.b	d1,(a2)
 
-	move.w	d0,(a2)
-
-	moveq	#D_EqScreenHeight,d6
-	move.w	d6,2(a2)
-
-	move.l	a1,a3
-	move.w	d7,d0
+	move.l	a1,a4
+	move.w	d6,d0
 	add.w	d0,d0
-	adda.w	d0,a3
+	adda.w	d0,a4
 
 	move.w	#$fff0,d0
-	subq.w	#1,d6
+	subq.w	#1,d1
 .draw:
-	move.w	d0,(a3)
-	lea	D_EqScreenWidthInBytes(a3),a3
-	dbf	d6,.draw
+	move.w	d0,(a4)
+	lea	D_EqScreenWidthInBytes(a4),a4
+	dbf	d1,.draw
 	bra.s	.ok
 	
 .nosound:
-	moveq	#0,d1
-	move.w	2(a2),d1
+	move.b	(a2),d1
 	beq.s	.ok
 
-	move.l	a1,a3
-	move.w	d7,d0
+	move.l	a1,a4
+	move.w	d6,d0
 	add.w	d0,d0
-	adda.w	d0,a3
+	adda.w	d0,a4
 
 	moveq	#D_EqScreenHeight,d2
 	sub.b	d1,d2
 	mulu	#D_EqScreenWidthInBytes,d2
-	adda.w	d2,a3
+	adda.w	d2,a4
+	move.w	#0,(a4)
 	
-	move.w	#0,(a3)
-	subq.w	#1,d1
-	move.w	d1,2(a2)
-	
+	subq.b	#1,d1
+	move.b	d1,(a2)
 .ok:
 	lea	FC_VOICE_SIZE(a0),a0
-	addq.w	#4,a2
+	addq.b	#1,d6
+	addq.w	#1,a2
 	dbf	d7,.loop
 	rts
 
-.channels:
-	;; note value, eq height
-	dc.w	0,0
-	dc.w	0,0
-	dc.w	0,0
-	dc.w	0,0
-
-D_EQ_PERIODS = 40
-PeriodEqualizer:
-	bsr.s	PeriodEqualizerDecrease
+FreqsEqualizer:
+	bsr.s	FreqsEqualizerDecrease
 
 	lea	FC_VoicesInfo(pc),a0
-	lea	PeriodEqualizerScreen(pc),a1
-	lea	PeriodsActivated(pc),a2
-	moveq	#FC_CHANNELS_NR-1,d7
+	lea	FreqsEqualizerScreen(pc),a1
+	lea	FreqsEqualizerValues(pc),a2
+	lea	FC_PlayInfo(pc),a3
+	
+	moveq	#FC_CHANNELS-1,d7
+	moveq	#0,d6
 .channel:
+	move.w	FC_PlayInfo_ChannelBitMask(a3),d0
+	btst	d6,d0
+	beq.s	.skip
+
 	tst.b	FC_VOICE_Volume(a0)
 	beq.s	.skip
 
@@ -415,32 +416,36 @@ PeriodEqualizer:
  	beq.s	.skip
  	sub.w	#FC_PERIOD_MIN,d0
 	
- 	mulu	#D_EQ_PERIODS,d0
+ 	mulu	#D_EqFreqs-1,d0
  	divu	#FC_PERIOD_MAX-FC_PERIOD_MIN,d0
 	
 	move.b	d4,(a2,d0.w)
 
  	move.w	#D_EqScreenHeight-1,d6
-	move.l	a1,a3
-	adda.w	d0,a3
+	move.l	a1,a5
+	adda.w	d0,a5
+	move.b	#$fe,d0
 .draw:
- 	move.b	#$fe,(a3)
- 	lea	D_EqScreenWidthInBytes(a3),a3
+ 	move.b	d0,(a5)
+ 	lea	D_EqScreenWidthInBytes(a5),a5
  	dbf	d6,.draw
 .skip:
 	lea	FC_VOICE_SIZE(a0),a0
+	addq.b	#1,d6
 	dbf	d7,.channel
 	rts
 	
-PeriodEqualizerDecrease:	
-	lea	PeriodEqualizerScreen(pc),a1
-	lea	PeriodsActivated(pc),a2
+FreqsEqualizerDecrease:	
+	lea	FreqsEqualizerScreen(pc),a1
+	lea	FreqsEqualizerValues(pc),a2
 	move.w	#D_EqScreenHeight,d4
 	moveq	#0,d5
-	moveq	#D_EQ_PERIODS-1,d7
+	moveq	#D_EqFreqs-1,d7
 .loop:
 	moveq	#0,d0
 	move.b	(a2),d0
+	beq.s	.next
+	cmp.b	#1,d0
 	beq.s	.next
 	subq.b	#1,(a2)
 
@@ -455,19 +460,16 @@ PeriodEqualizerDecrease:
 	dbf	d7,.loop
 	rts
 	
-PeriodsActivated:
-	blk.b	D_EQ_PERIODS,0
-
 ClearScreens:
 
-	lea	PeriodEqualizerScreen(pc),a0
+	lea	FreqsEqualizerScreen(pc),a0
 	move.w	#D_EqScreenSize-1,d7
 	moveq	#0,d0
 .l1:
 	move.b	d0,(a0)+
 	dbf	d7,.l1
 
-	lea	EqualizerScreen(pc),a0
+	lea	ChannelsEqualizerScreen(pc),a0
 	move.w	#D_EqScreenSize-1,d7
 	moveq	#0,d0
 .l2:
@@ -544,7 +546,7 @@ Copper:
 	dc.w	$180,0
 	
 	dc.w	$3007,$fffe
-CopperEqualizer:	
+CopperChannelsEqualizer:	
 	dc.w	$e0,0
 	dc.w	$e2,0
 	dc.w	$100,$1200
@@ -580,7 +582,7 @@ CopperBitplanes:
 	dc.w	$108,0
 	dc.w	$10a,0
 
-CopperPeriodEqualizer:	
+CopperFreqsEqualizer:	
 	dc.w	$e0,0
 	dc.w	$e2,0
 	dc.w	$100,$1200
@@ -590,16 +592,22 @@ CopperPeriodEqualizer:
 	dc.w	$100,0
 	dc.w	$ffff,$fffe		;magic value to end copperlist
 
+;;;-------------------------------------------------------------------
+ChannelsEqualizerValues:
+	dc.b	0,0,0,0
+FreqsEqualizerValues:
+	blk.b	D_EqFreqs,0
+
 Font:
 	incbin	font1x1x3.rawblit
 FontPtrs:
 	ds.l	D_FontQuantity
 MessageScreen:
 	ds.b	D_ScreenBitplaneSize*D_ScreenBitplanes
-EqualizerScreen:
+ChannelsEqualizerScreen:
 	ds.b	D_EqScreenSize
-PeriodEqualizerScreen:
+FreqsEqualizerScreen:
 	ds.b	D_EqScreenSize
 	
 Module:
-	incbin ice2	
+	incbin ice2

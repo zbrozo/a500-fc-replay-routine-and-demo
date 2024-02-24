@@ -1,7 +1,7 @@
 *********************************************************
 **  Amiga FUTURE COMPOSER  »» V1.4 ««  Replay routine  **
 *********************************************************
-** refactored and optimized by Bishop/Turnips 2023-2024
+** refactored, optimized and fixed by Zbrozo aka Bishop/Turnips 2023-2024
 	
 ;Doesn't work with V1.0 - V1.3 modules !!
 
@@ -21,9 +21,9 @@
 ;; 	move.l $4,a6
 ;; 	jmp -138(a6)
 
-FC_SAMPLES_NR		= 10
-FC_WAVEFORMS_NR		= 80
-FC_CHANNELS_NR		= 4
+FC_SAMPLES		= 10
+FC_WAVEFORMS		= 80
+FC_CHANNELS		= 4
 
 FC_MOD_SEQ_SIZE		= 4		; size of sequence table
 FC_MOD_PAT 		= 8		; long - offset to patterns
@@ -47,13 +47,13 @@ FC_VOICE_VolumeTime	= 15		; byte
 FC_VOICE_VolumePos	= 16		; word
 FC_VOICE_FreqPtr	= 18		; long
 FC_VOICE_SoundTranspose	= 22		; byte - instrument change
-FC_VOICE_VolumeSpeedTmp	= 23		; byte	- for calculation
+FC_VOICE_VolumeSpeedTmp	= 23		; byte - temporary value
 FC_VOICE_VolumeSpeed 	= 24		; byte
 FC_VOICE_SustainVolume	= 25		; byte
 FC_VOICE_SustainTime	= 26		; byte
 FC_VOICE_VibratoSpeed   = 27		; byte
 FC_VOICE_VibratoAmp	= 28		; byte
-FC_VOICE_VibratoAmpTmp	= 29		; byte - temporary value for calculation
+FC_VOICE_VibratoAmpTmp	= 29		; byte - temporary value
 FC_VOICE_VibratoDelay	= 30		; byte
 FC_VOICE_ChannelBitMask	= 32		; word
 FC_VOICE_PatternPtr	= 34		; long
@@ -61,8 +61,8 @@ FC_VOICE_VolumeDelay	= 38		; byte
 FC_VOICE_PortamentoDelay = 39		; byte
 FC_VOICE_PatternPos 	= 40		; word
 FC_VOICE_PitchBendDelay = 42		; byte
-FC_VOICE_FreqTranspose	= 43		; byte - transpose value for note
-FC_VOICE_Transpose	= 44		; byte - note change
+FC_VOICE_FreqTranspose	= 43		; byte - transpose value for note change from freq table
+FC_VOICE_Transpose	= 44		; byte - transpose value for note change from sequencer
 FC_VOICE_Volume		= 45		; byte
 FC_VOICE_VibratoState	= 46		; byte
 FC_VOICE_PortamentoInfo	= 47		; byte
@@ -74,8 +74,8 @@ FC_VOICE_RepeatStart 	= 64		; word
 FC_VOICE_RepeatLength 	= 66		; word
 FC_VOICE_SamplePtr 	= 68		; long
 FC_VOICE_RepeatStartAndLengthDelay = 72	; word
-FC_VOICE_Period 	= 74
-FC_VOICE_SIZE		= 76
+FC_VOICE_Period 	= 74		; word - for equalizer usage only
+FC_VOICE_SIZE		= 76		; should be able to divide by 4 without rest
 
 FC_SEQ_SPEED		= 12		; offset to speed in sequence
 FC_SEQ_SIZE		= 13		; sequence size
@@ -122,23 +122,23 @@ FC_INIT:
 
 	move.l	FC_MOD_SEQ_SIZE(a0),d0
 
-	bsr	FC_InitSamples
-	bsr	FC_InitWaveforms
+	bsr.s	FC_InitSamples
+	bsr.s	FC_InitWaveforms
 
 	move.l	FC_PlayInfo_SEQptr(a5),a0
-	bsr	FC_InitSpeed
+	bsr.s	FC_InitSpeed
 
         lea	FC_VoicesInfo(pc),a0
 	move.l	FC_PlayInfo_PATptr(a5),a1
 	move.l	FC_PlayInfo_SEQptr(a5),a2
-	bsr	FC_InitVoices
+	bsr.s	FC_InitVoices
 
 	rts
 
 FC_InitSamples:
         lea	FC_MOD_SamplesInfo(a0),a1
         lea	FC_SamplesInfo+4(pc),a2
-        moveq	#FC_SAMPLES_NR-1,d1
+        moveq	#FC_SAMPLES-1,d1
 .loop1:
         move.w 	(a1)+,(a2)+	; length
         move.l 	(a1)+,(a2)+	; repeat start, repeat length
@@ -169,7 +169,7 @@ FC_InitWaveforms:
         move.l	a0,a3
         add.l	FC_MOD_Waveforms(a0),a3
 
-        moveq	#FC_WAVEFORMS_NR-1,d1
+        moveq	#FC_WAVEFORMS-1,d1
         moveq	#0,d2
 .loop:
         move.l	a3,(a2)+	; address of waveform
@@ -206,7 +206,7 @@ FC_InitVoices:
         moveq	#0,d7		; start offset in sequence
 	moveq	#0,d2		; bit number in bitmask
 	moveq	#0,d3		; offset to voice in sequence table
-	moveq	#FC_CHANNELS_NR-1,d5
+	moveq	#FC_CHANNELS-1,d5
 .l:
 	bsr.b	FC_InitVoice
         lea	FC_VOICE_SIZE(a0),a0
@@ -330,7 +330,7 @@ FC_PLAY:
         move.w 	FC_VOICE_RepeatLength+(3*FC_VOICE_SIZE)(a0),d4
 
 	;; Turn on channels
-        move.w	(a5),d7			; Bitmask
+        move.w	FC_PlayInfo_ChannelBitMask(a5),d7	; Bitmask
         ori.w	#$8000,d7		; Set/clr bit = 1
         move.w	d7,DMACON(a6)		; Enable audio DMA
 
@@ -451,7 +451,7 @@ FC_NewNote:
 
 	;; turn off channel
 	move.w	FC_VOICE_ChannelBitMask(a0),d3
-        or.w	d3,(a5)
+        or.w	d3,FC_PlayInfo_ChannelBitMask(a5)
         move.w	d3,DMACON(a6)
 
         andi.w	#$003f,d1			; Max 64 instruments
@@ -543,7 +543,7 @@ FC_Effects:
 .cmdE2newsound:
 	;; turn off channel
         move.w	FC_VOICE_ChannelBitMask(a0),d1
-        or.w	d1,(a5)
+        or.w	d1,FC_PlayInfo_ChannelBitMask(a5)
         move.w	d1,DMACON(a6)
 
 	moveq	#0,d0
@@ -587,7 +587,7 @@ FC_Effects:
 .cmdE9newsample:
 	;; turn off channel
         move.w	FC_VOICE_ChannelBitMask(a0),d1
-        or.w	d1,(a5)
+        or.w	d1,FC_PlayInfo_ChannelBitMask(a5)
         move.w	d1,DMACON(a6)
 
         moveq	#0,d0
@@ -687,7 +687,7 @@ FC_VOLUfx:
 
 .cmds:
 	dc.b	.cmdE0volumeLoop-.cmds 		;E0
-	dc.b	.calcperiod-.cmds      		;E1 - volume end
+	dc.b	.calcperiod-.cmds      		;E1 - volume end, it stays on the last position in volume table
 	dc.b	.calcperiod-.cmds		;not used
 	dc.b	.calcperiod-.cmds		;not used
 	dc.b	.calcperiod-.cmds		;not used
@@ -919,7 +919,7 @@ FC_PERIODS:
 	dc.w $0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071
 
 FC_SamplesInfo:
-	REPT	FC_SAMPLES_NR
+	REPT	FC_SAMPLES
 	dc.l	0		; start
 	dc.w	0		; length
 	dc.w	0		; repeat start
@@ -928,7 +928,7 @@ FC_SamplesInfo:
 	ENDR
 
 FC_WaveformsInfo:
-	REPT	FC_WAVEFORMS_NR
+	REPT	FC_WAVEFORMS
 	dc.l	0		; start
 	dc.w	0		; length
 	dc.w	0		; repeat start
