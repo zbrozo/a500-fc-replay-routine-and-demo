@@ -1,6 +1,6 @@
 ;;; -*- coding: cp852 -*-
 ;;; Demo with refactored FutureComposer1.4 replay routine and equalizers
-;;; Coded by Zbroæo aka Bishop/Turnips 2024
+;;; Coded by Zbrozo aka Bishop/Turnips 2024
 ;;;-------------------------------------------------------------------
 
 	incdir ZPRJ:fc/
@@ -23,28 +23,29 @@ D_FontHeight = 8
 D_FontBitmapWidthInBytes = 40
 D_FontBitmapHeight = D_FontHeight*D_FontBitplanes
 D_FontBitplaneSize = D_FontBitmapWidthInBytes*D_FontBitmapHeight
-	
+
 D_ScreenWidth = 320
 D_ScreenWidthInBytes = (D_ScreenWidth/8)
 D_ScreenHeight = 8*3
 D_ScreenBitplaneSize = D_ScreenWidthInBytes*D_ScreenHeight
-D_ScreenBitplanes = 3	
+D_ScreenBitplanes = 3
 
 D_MessageLineSize = D_ScreenWidthInBytes*D_FontHeight*D_FontBitplanes
-	
+D_MessageScreenSize = D_ScreenBitplaneSize*D_ScreenBitplanes
+                    
 D_EqScreenHeight = 64
 D_EqScreenWidth = 320
-D_EqScreenWidthInBytes = D_EqScreenWidth/8	
+D_EqScreenWidthInBytes = D_EqScreenWidth/8
 D_EqScreenSize = D_EqScreenWidthInBytes*D_EqScreenHeight
 D_EqFreqs = 40
-	
+
 D_BackgroundColor = $000
 
-	
+
 Main:
 	bsr	Start
 
-	lea	Module(pc),a0
+	lea	Module6,a0
 	jsr	INIT_MUSIC
 
 	move.l	VectorBaseRegister(pc),a0
@@ -53,24 +54,24 @@ Main:
 	bsr	InitCopper
 	bsr	InitFontPtrs
 	bsr	ClearScreens
-	
+
 	lea	Message1(pc),a1
 	bsr	GetTextLen
-	lea	MessageScreen(pc),a0
+	lea	MessageScreen,a0
 	bsr	WriteTextLine
 
 	lea	Message2(pc),a1
 	bsr	GetTextLen
-	lea	MessageScreen(pc),a0
+	lea	MessageScreen,a0
 	adda.w	#D_MessageLineSize,a0
 	bsr	WriteTextLine
 
 	lea	Message3(pc),a1
 	bsr	GetTextLen
-	lea	MessageScreen(pc),a0
+	lea	MessageScreen,a0
 	adda.w	#D_MessageLineSize*2,a0
 	bsr	WriteTextLine
-	
+
 	lea	CUSTOM,a6
 	move.w	#$83e0,DMACON(a6)
 	move.w	#$c010,INTENA(a6)
@@ -87,7 +88,7 @@ Main:
 	bsr	HexToDec
 	lea	Message1(pc),a1
 	bsr	GetTextLen
-	lea	MessageScreen(pc),a0
+	lea	MessageScreen,a0
 	adda.w	d7,a0
 	bsr	WriteDecValue
 
@@ -95,28 +96,28 @@ Main:
 	bsr	HexToDec
 	lea	Message2(pc),a1
 	bsr	GetTextLen
-	lea	MessageScreen(pc),a0
+	lea	MessageScreen,a0
 	adda.w	#D_MessageLineSize,a0
 	adda.w	d7,a0
 	bsr	WriteDecValue
 
-	subq.w	#1,PlayerTimeCurrDelay(a0)
+	subq.w	#1,PlayerTimeCurrDelay(a5)
 	bpl.b	.ok
-	move.w	#4,PlayerTimeCurrDelay(a0)
-	
+	move.w	#4,PlayerTimeCurrDelay(a5)
+
 	move.w	PlayerTimeCurr(a5),d0
 	bsr	HexToDec
 	lea	Message3(pc),a1
 	bsr	GetTextLen
-	lea	MessageScreen(pc),a0
+	lea	MessageScreen,a0
 	adda.w	#D_MessageLineSize*2,a0
 	adda.w	d7,a0
 	bsr	WriteDecValue
 .ok:
-	
+
 	bsr	ChannelsEqualizer
 	bsr	FreqsEqualizer
-	
+
 	btst	#6,$bfe001
 	bne	.loop
 
@@ -124,7 +125,7 @@ Main:
 	bra	Quit
 
 ;;; **********************************************
-	
+
 Player:
 	bsr	GetRasterPosition
 	move.w	d0,-(a7)
@@ -144,7 +145,7 @@ Player:
 	ble	.okmin
 	move.w	d0,PlayerTimeMin(a0)
 .okmin:
-	
+
 	move.w	PlayerTimeMax(a0),d1
 	cmp.w	d0,d1
 	bge	.okmax
@@ -162,7 +163,7 @@ PlayerTimes:
 	dc.w	0
 	dc.w	0
 	dc.w	0
-	
+
 IntLevel3Handler:
 
 	movem.l	d0-a6,-(a7)
@@ -220,7 +221,7 @@ WaitBlitter:				;wait until blitter is finished
 	rts
 
 InitCopper:
-	lea	MessageScreen(pc),a0
+	lea	MessageScreen,a0
 	lea	CopperBitplanes(pc),a1
 	moveq	#D_ScreenBitplanes-1,d7
 .l:
@@ -232,24 +233,24 @@ InitCopper:
 	adda.w	#8,a1
 	dbf	d7,.l
 
-	lea	ChannelsEqualizerScreen(pc),a0
+	lea	ChannelsEqualizerScreen,a0
 	lea	CopperChannelsEqualizer(pc),a1
 	move.l	a0,d0
 	move.w	d0,6(a1)
 	swap	d0
 	move.w	d0,2(a1)
 
-	lea	FreqsEqualizerScreen(pc),a0
+	lea	FreqsEqualizerScreen,a0
 	lea	CopperFreqsEqualizer(pc),a1
 	move.l	a0,d0
 	move.w	d0,6(a1)
 	swap	d0
 	move.w	d0,2(a1)
 	rts
-	
-InitFontPtrs:	
-	lea	Font(pc),a0		
-	lea	FontPtrs(pc),a1
+
+InitFontPtrs:
+	lea	Font(pc),a0
+	lea	FontPtrs,a1
 	moveq	#D_FontCharsY-1,d7
 .l1:
 	moveq	#D_FontBitmapWidthInBytes/D_FontWidthInBytes-1,d6
@@ -277,7 +278,7 @@ WriteTextLine:
 
 ;;; a0 - screen
 ;;; d0 - dec value
-WriteDecValue:	
+WriteDecValue:
 	move.w	d0,d1
 	and.b	#$f0,d0
 	lsr.b	#4,d0
@@ -286,12 +287,12 @@ WriteDecValue:
 
 	addq.w	#D_FontWidthInBytes,a0
 	move.b	d1,d0
-	
+
 	and.b	#$0f,d0
 	add.b	#'0',d0
 	bsr.s	PutFontChar
 	rts
-	
+
 ;;; a0 - screen
 ;;; d0.w - char
 PutFontChar:
@@ -299,7 +300,7 @@ PutFontChar:
 	move.b	(a2,d0.w),d0
 	add.w	d0,d0
 	add.w	d0,d0
-	lea	FontPtrs(pc),a2
+	lea	FontPtrs,a2
 	move.l	(a2,d0.w),a2
 
 	move.l	a0,a3
@@ -310,7 +311,7 @@ PutFontChar:
 .nr	set 	.nr+1
 	ENDR
 	rts
-	
+
 ;;; in: a1 - text
 ;;; out: d7 - length
 GetTextLen:
@@ -340,8 +341,8 @@ HexToDec:
 
 ChannelsEqualizer:
 	lea	FC_VoicesInfo(pc),a0
-	lea	ChannelsEqualizerScreen(pc),a1
-	lea	ChannelsEqualizerValues(pc),a2
+	lea	ChannelsEqualizerScreen,a1
+	lea	ChannelsEqualizerValues,a2
 	lea	FC_PlayInfo(pc),a3
 	moveq	#0,d6
 	moveq	#FC_CHANNELS-1,d7
@@ -350,10 +351,10 @@ ChannelsEqualizer:
 	move.w	FC_PlayInfo_ChannelBitMask(a3),d1
 	btst	d6,d1
 	beq.s	.nosound
-	
+
 	move.w	FC_VOICE_RepeatStartAndLengthDelay(a0),d1
 	beq.s	.nosound
-	
+
 	moveq	#D_EqScreenHeight,d1
 	move.b	d1,(a2)
 
@@ -369,7 +370,7 @@ ChannelsEqualizer:
 	lea	D_EqScreenWidthInBytes(a4),a4
 	dbf	d1,.draw
 	bra.s	.ok
-	
+
 .nosound:
 	move.b	(a2),d1
 	beq.s	.ok
@@ -384,7 +385,7 @@ ChannelsEqualizer:
 	mulu	#D_EqScreenWidthInBytes,d2
 	adda.w	d2,a4
 	move.w	#0,(a4)
-	
+
 	subq.b	#1,d1
 	move.b	d1,(a2)
 .ok:
@@ -398,10 +399,10 @@ FreqsEqualizer:
 	bsr.s	FreqsEqualizerDecrease
 
 	lea	FC_VoicesInfo(pc),a0
-	lea	FreqsEqualizerScreen(pc),a1
+	lea	FreqsEqualizerScreen,a1
 	lea	FreqsEqualizerValues(pc),a2
 	lea	FC_PlayInfo(pc),a3
-	
+
 	moveq	#FC_CHANNELS-1,d7
 	moveq	#0,d6
 .channel:
@@ -415,10 +416,10 @@ FreqsEqualizer:
  	move.w	FC_VOICE_Period(a0),d0
  	beq.s	.skip
  	sub.w	#FC_PERIOD_MIN,d0
-	
+
  	mulu	#D_EqFreqs-1,d0
  	divu	#FC_PERIOD_MAX-FC_PERIOD_MIN,d0
-	
+
 	move.b	d4,(a2,d0.w)
 
  	move.w	#D_EqScreenHeight-1,d6
@@ -434,9 +435,9 @@ FreqsEqualizer:
 	addq.b	#1,d6
 	dbf	d7,.channel
 	rts
-	
-FreqsEqualizerDecrease:	
-	lea	FreqsEqualizerScreen(pc),a1
+
+FreqsEqualizerDecrease:
+	lea	FreqsEqualizerScreen,a1
 	lea	FreqsEqualizerValues(pc),a2
 	move.w	#D_EqScreenHeight,d4
 	moveq	#0,d5
@@ -459,45 +460,45 @@ FreqsEqualizerDecrease:
 	addq.w	#1,a2
 	dbf	d7,.loop
 	rts
-	
+
 ClearScreens:
 
-	lea	FreqsEqualizerScreen(pc),a0
+	lea	FreqsEqualizerScreen,a0
 	move.w	#D_EqScreenSize-1,d7
 	moveq	#0,d0
 .l1:
 	move.b	d0,(a0)+
 	dbf	d7,.l1
 
-	lea	ChannelsEqualizerScreen(pc),a0
+	lea	ChannelsEqualizerScreen,a0
 	move.w	#D_EqScreenSize-1,d7
 	moveq	#0,d0
 .l2:
 	move.b	d0,(a0)+
 	dbf	d7,.l2
 
-	lea	MessageScreen(pc),a0
+	lea	MessageScreen,a0
 	move.w	#D_ScreenBitplaneSize*D_ScreenBitplanes-1,d7
 	moveq	#0,d0
 .l3:
 	move.b	d0,(a0)+
 	dbf	d7,.l3
-	
+
 	rts
-	
+
 ;;; **********************************************
 HexToDecTable:	dc.b	0,1,2,3,4,5,6,7,8,9,$10,$11,$12,$13,$14,$15
-	
+
 Message1:	dc.b	"MINIMUM REPLAY RASTER TIME:",0
 Message2:	dc.b	"MAXIMUM REPLAY RASTER TIME:",0
 Message3:	dc.b	"CURRENT REPLAY RASTER TIME:",0
 		EVEN
-	
-FontCodePage852:	
+
+FontCodePage852:
 	dc.b 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
-	;; 
+	;;
 	dc.b 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
-	;; 
+	;;
 	dc.b 00,01,00,00,00,00,00,07,00,00,00,11,12,13,14,34
 	;;      !  "  #  $  %  &  '  (  )  *  +  ,  -  .  /
 	dc.b 16,17,18,19,20,21,22,23,24,25,26,27,00,00,00,31
@@ -509,26 +510,26 @@ FontCodePage852:
 	dc.b 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
 	;;   `  a  b  c  d  e  f  g  h  i  j  k  l  m  n  o
 	dc.b 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
-	;;   p  q  r  s  t  u  v  w  x  y  z  {  |  }  ~  
+	;;   p  q  r  s  t  u  v  w  x  y  z  {  |  }  ~
 	dc.b 00,00,00,00,00,00,03,00,00,00,00,00,00,10,00,03
-	;;                     Ü     à              ç     è
+	;;                     ÔøΩ     ÔøΩ              ÔøΩ     ÔøΩ
 	dc.b 00,00,00,00,00,00,00,09,00,00,00,00,00,05,00,00
-	;;                        ó  ò              ù
+	;;                        ÔøΩ  ÔøΩ              ÔøΩ
 	dc.b 00,00,00,00,02,00,00,00,04,00,00,00,00,00,00,00
-	;;         ¢     §  •        ®  ©     ´
+	;;         ÔøΩ     ÔøΩ  ÔøΩ        ÔøΩ  ÔøΩ     ÔøΩ
 	dc.b 00,00,00,00,00,00,00,00,00,00,00,00,00,15,00,00
-	;;                                          Ω  æ
+	;;                                          ÔøΩ  ÔøΩ
 	dc.b 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
-	;; 
+	;;
 	dc.b 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
-	;; 
+	;;
 	dc.b 08,00,00,06,00,00,00,00,00,00,00,00,00,00,00,00
-	;;   ‡        „  ‰
+	;;   ÔøΩ        ÔøΩ  ÔøΩ
 	dc.b 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
 
 BPLCON_HIRES = $8000
 BPLCON_COLOR = $200
-	
+
 Copper:
 	dc.w	$96,$20
 	dc.w	$1fc,0			;Slow fetch mode, remove if AGA demo.
@@ -544,29 +545,29 @@ Copper:
 	dc.w	$102,0			;Scroll register (and playfield pri)
 
 	dc.w	$180,0
-	
+
 	dc.w	$3007,$fffe
-CopperChannelsEqualizer:	
+CopperChannelsEqualizer:
 	dc.w	$e0,0
 	dc.w	$e2,0
 	dc.w	$100,$1200
 	dc.w	$182,$fff
 	dc.w	$7007,$fffe
-	
+
 	dc.w	$0180,D_BackgroundColor
 
-	dc.w 	$0182,$0fd3,$0184,$0f92,$0186,$0e72
-	dc.w 	$0188,$0c50,$018a,$0a41,$018c,$0930,$018e,$0720
-	
+	dc.w	$0182,$0fd3,$0184,$0f92,$0186,$0e72
+	dc.w	$0188,$0c50,$018a,$0a41,$018c,$0930,$018e,$0720
+
 	dc.w	$100,0
 
 	dc.w	D_PlayerWaitRaster*$100+7,$fffe
 	dc.w	$9c,$8010		; int request
-	
+
 	dc.w	$d807,$fffe
 	dc.w	$108,D_ScreenWidthInBytes*(D_ScreenBitplanes-1)
 	dc.w	$10a,D_ScreenWidthInBytes*(D_ScreenBitplanes-1)
-	
+
 CopperBitplanes:
 	dc.w	$e0,0
 	dc.w	$e2,0
@@ -582,7 +583,7 @@ CopperBitplanes:
 	dc.w	$108,0
 	dc.w	$10a,0
 
-CopperFreqsEqualizer:	
+CopperFreqsEqualizer:
 	dc.w	$e0,0
 	dc.w	$e2,0
 	dc.w	$100,$1200
@@ -600,14 +601,37 @@ FreqsEqualizerValues:
 
 Font:
 	incbin	font1x1x3.rawblit
+
+
+Menu:
+	dc.b	"   ice2   "
+	dc.b	"          "
+	dc.b	0
+	EVEN
+Module1:
+	incbin ice2
+Module2:
+	incbin shaolin.fc
+Module3:
+	incbin horizon.fc
+Module4:
+	incbin complex.fc
+Module5:
+	incbin trsi2.fc
+Module6:
+	incbin trilogy.fc
+
+;;;-------------------------------------------------------------------
+
+        section buffers,bss_c
+        
 FontPtrs:
 	ds.l	D_FontQuantity
 MessageScreen:
-	ds.b	D_ScreenBitplaneSize*D_ScreenBitplanes
+	ds.b	D_MessageScreenSize
 ChannelsEqualizerScreen:
 	ds.b	D_EqScreenSize
 FreqsEqualizerScreen:
 	ds.b	D_EqScreenSize
-	
-Module:
-	incbin ice2
+
+        
