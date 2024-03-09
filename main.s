@@ -3,8 +3,6 @@
 ;;; Coded by Zbrozo aka Bishop/Turnips 2024
 ;;;-------------------------------------------------------------------
 
-	incdir ZPRJ:fc/
-
 	section main,code_c
 
 	bra	Main
@@ -41,11 +39,16 @@ D_EqFreqs = 40
 
 D_BackgroundColor = $000
 
-
+D_SpritePosX = 64
+D_SpriteGapX = 1
+D_SpriteHeight = 64
+D_SpritePosY = $30+(D_SpriteHeight/2)
+D_SpriteSize = (64+2)*4
+             
 Main:
 	bsr	Start
 
-	lea	Module6,a0
+	lea	Module2,a0
 	jsr	INIT_MUSIC
 
 	move.l	VectorBaseRegister(pc),a0
@@ -53,8 +56,8 @@ Main:
 
 	bsr	InitCopper
 	bsr	InitFontPtrs
-	bsr	ClearScreens
-
+        bsr     InitSprites
+        
 	lea	Message1(pc),a1
 	bsr	GetTextLen
 	lea	MessageScreen,a0
@@ -115,8 +118,9 @@ Main:
 	bsr	WriteDecValue
 .ok:
 
-	bsr	ChannelsEqualizer
-	bsr	FreqsEqualizer
+*	bsr	ChannelsEqualizer
+        bsr     SpriteEqualizer
+        bsr	FreqsEqualizer
 
 	btst	#6,$bfe001
 	bne	.loop
@@ -246,6 +250,7 @@ InitCopper:
 	move.w	d0,6(a1)
 	swap	d0
 	move.w	d0,2(a1)
+
 	rts
 
 InitFontPtrs:
@@ -263,6 +268,42 @@ InitFontPtrs:
 	dbf	d7,.l1
 	rts
 
+InitSprites:
+        lea     CopperSprites(pc),a0
+        move.w  #$120,d0
+        moveq   #15,d7
+.sprites:     
+        move.w  d0,(a0)
+        addq.w  #4,a0
+        addq.w  #2,d0
+        dbf     d7,.sprites
+
+	lea	CopperSprites(pc),a0
+        lea     NullSprite(pc),a1
+        moveq   #7,d7
+.l:    
+        move.l  a1,d0
+	move.w	d0,6(a0)
+	swap	d0
+	move.w	d0,2(a0)
+        addq.w  #8,a0
+        adda.w  #D_SpriteSize,a1	; next sprite
+        dbf     d7,.l
+        
+	lea	CopperSprites(pc),a0
+	lea     EqualizerSprites(pc),a1
+        moveq   #3,d7
+.l2:     
+        move.l  a1,d0
+	move.w	d0,6(a0)
+	swap	d0
+	move.w	d0,2(a0)
+
+        addq.w  #8,a0
+        adda.w  #D_SpriteSize,a1	; next sprite
+        dbf     d7,.l2
+	rts
+        
 ;;; a0 - screen
 ;;; a1 - text
 ;;; d7 - text len
@@ -339,61 +380,95 @@ HexToDec:
 	add.w	d1,d0
 	rts
 
-ChannelsEqualizer:
+SpriteEqualizer:
 	lea	FC_VoicesInfo(pc),a0
-	lea	ChannelsEqualizerScreen,a1
-	lea	ChannelsEqualizerValues,a2
+        lea     EqualizerSprites(pc),a1
 	lea	FC_PlayInfo(pc),a3
-	moveq	#0,d6
-	moveq	#FC_CHANNELS-1,d7
-.loop:
+        moveq	#0,d6
+        moveq   #3,d7
+.l:     
+        bsr     .changeChannel
+        lea	FC_VOICE_SIZE(a0),a0
+        lea     D_SpriteSize(a1),a1
+        addq.b	#1,d6
+        dbf     d7,.l
+        rts
 
-	move.w	FC_PlayInfo_ChannelBitMask(a3),d1
+.changeChannel:
+        move.w	FC_PlayInfo_ChannelBitMask(a3),d1
 	btst	d6,d1
 	beq.s	.nosound
 
 	move.w	FC_VOICE_RepeatStartAndLengthDelay(a0),d1
 	beq.s	.nosound
 
-	moveq	#D_EqScreenHeight,d1
-	move.b	d1,(a2)
+        move.b  #D_SpritePosY-(D_SpriteHeight/2),(a1)
+        move.b  #D_SpritePosY+(D_SpriteHeight/2),2(a1)
+	bra.s	.end
+.nosound:       
+        cmp.b	#D_SpritePosY-1,(a1)
+	beq.s	.end
+        
+	add.b	#1,(a1)
+	sub.b	#1,2(a1)
+.end:   
+        rts
+        
+; ChannelsEqualizer:
+; 	lea	FC_VoicesInfo(pc),a0
+; 	lea	ChannelsEqualizerScreen,a1
+; 	lea	ChannelsEqualizerValues,a2
+; 	lea	FC_PlayInfo(pc),a3
+; 	moveq	#0,d6
+; 	moveq	#FC_CHANNELS-1,d7
+; .loop:
 
-	move.l	a1,a4
-	move.w	d6,d0
-	add.w	d0,d0
-	adda.w	d0,a4
+; 	move.w	FC_PlayInfo_ChannelBitMask(a3),d1
+; 	btst	d6,d1
+; 	beq.s	.nosound
 
-	move.w	#$fff0,d0
-	subq.w	#1,d1
-.draw:
-	move.w	d0,(a4)
-	lea	D_EqScreenWidthInBytes(a4),a4
-	dbf	d1,.draw
-	bra.s	.ok
+; 	move.w	FC_VOICE_RepeatStartAndLengthDelay(a0),d1
+; 	beq.s	.nosound
 
-.nosound:
-	move.b	(a2),d1
-	beq.s	.ok
+; 	moveq	#D_EqScreenHeight,d1
+; 	move.b	d1,(a2)
 
-	move.l	a1,a4
-	move.w	d6,d0
-	add.w	d0,d0
-	adda.w	d0,a4
+; 	move.l	a1,a4
+; 	move.w	d6,d0
+; 	add.w	d0,d0
+; 	adda.w	d0,a4
 
-	moveq	#D_EqScreenHeight,d2
-	sub.b	d1,d2
-	mulu	#D_EqScreenWidthInBytes,d2
-	adda.w	d2,a4
-	move.w	#0,(a4)
+; 	move.w	#$fff0,d0
+; 	subq.w	#1,d1
+; .draw:
+; 	move.w	d0,(a4)
+; 	lea	D_EqScreenWidthInBytes(a4),a4
+; 	dbf	d1,.draw
+; 	bra.s	.ok
 
-	subq.b	#1,d1
-	move.b	d1,(a2)
-.ok:
-	lea	FC_VOICE_SIZE(a0),a0
-	addq.b	#1,d6
-	addq.w	#1,a2
-	dbf	d7,.loop
-	rts
+; .nosound:
+; 	move.b	(a2),d1
+; 	beq.s	.ok
+
+; 	move.l	a1,a4
+; 	move.w	d6,d0
+; 	add.w	d0,d0
+; 	adda.w	d0,a4
+
+; 	moveq	#D_EqScreenHeight,d2
+; 	sub.b	d1,d2
+; 	mulu	#D_EqScreenWidthInBytes,d2
+; 	adda.w	d2,a4
+; 	move.w	#0,(a4)
+
+; 	subq.b	#1,d1
+; 	move.b	d1,(a2)
+; .ok:
+; 	lea	FC_VOICE_SIZE(a0),a0
+; 	addq.b	#1,d6
+; 	addq.w	#1,a2
+; 	dbf	d7,.loop
+; 	rts
 
 FreqsEqualizer:
 	bsr.s	FreqsEqualizerDecrease
@@ -461,31 +536,6 @@ FreqsEqualizerDecrease:
 	dbf	d7,.loop
 	rts
 
-ClearScreens:
-
-	lea	FreqsEqualizerScreen,a0
-	move.w	#D_EqScreenSize-1,d7
-	moveq	#0,d0
-.l1:
-	move.b	d0,(a0)+
-	dbf	d7,.l1
-
-	lea	ChannelsEqualizerScreen,a0
-	move.w	#D_EqScreenSize-1,d7
-	moveq	#0,d0
-.l2:
-	move.b	d0,(a0)+
-	dbf	d7,.l2
-
-	lea	MessageScreen,a0
-	move.w	#D_ScreenBitplaneSize*D_ScreenBitplanes-1,d7
-	moveq	#0,d0
-.l3:
-	move.b	d0,(a0)+
-	dbf	d7,.l3
-
-	rts
-
 ;;; **********************************************
 HexToDecTable:	dc.b	0,1,2,3,4,5,6,7,8,9,$10,$11,$12,$13,$14,$15
 
@@ -531,21 +581,25 @@ BPLCON_HIRES = $8000
 BPLCON_COLOR = $200
 
 Copper:
-	dc.w	$96,$20
-	dc.w	$1fc,0			;Slow fetch mode, remove if AGA demo.
+	dc.w	$1fc,0			
 	dc.w	$106,$0c00		;(AGA compat. if any Dual Playf. mode)
 
-	dc.w	$8e,$2c81		;238h display window top, left
-	dc.w	$90,$2cc1		;and bottom, right.
-	dc.w	$92,$38			;Standard bitplane dma fetch start
-	dc.w	$94,$d0			;and stop for standard screen.
+	dc.w	$8e,$2c81		
+	dc.w	$90,$2cc1		
+	dc.w	$92,$38			
+	dc.w	$94,$d0			
 
+CopperSprites:
+        blk.l   16,0
+
+        
 	dc.w	$108,0
 	dc.w	$10a,0
-	dc.w	$102,0			;Scroll register (and playfield pri)
+	dc.w	$102,0		       
 
 	dc.w	$180,0
 
+        
 	dc.w	$3007,$fffe
 CopperChannelsEqualizer:
 	dc.w	$e0,0
@@ -559,6 +613,10 @@ CopperChannelsEqualizer:
 	dc.w	$0182,$0fd3,$0184,$0f92,$0186,$0e72
 	dc.w	$0188,$0c50,$018a,$0a41,$018c,$0930,$018e,$0720
 
+        ;; sprite colors
+	dc.w	$01a2,$fff
+	dc.w	$01aa,$fff
+        
 	dc.w	$100,0
 
 	dc.w	D_PlayerWaitRaster*$100+7,$fffe
@@ -593,6 +651,42 @@ CopperFreqsEqualizer:
 	dc.w	$100,0
 	dc.w	$ffff,$fffe		;magic value to end copperlist
 
+EqualizerSprites:
+        dc.b	D_SpritePosY-1
+	dc.b	D_SpritePosX
+	dc.b	D_SpritePosY
+	dc.b	0
+	blk.l	64,$ffff0000
+	dc.l    0
+
+        dc.b	D_SpritePosY-1
+	dc.b	D_SpritePosX+8+D_SpriteGapX
+	dc.b	D_SpritePosY
+	dc.b	0
+	blk.l	64,$ffff0000
+	dc.l	0
+
+        dc.b	D_SpritePosY-1
+	dc.b	D_SpritePosX+((8+D_SpriteGapX)*2)
+	dc.b	D_SpritePosY
+	dc.b	0
+	blk.l	64,$ffff0000
+	dc.l	0
+
+        dc.b	D_SpritePosY-1
+	dc.b	D_SpritePosX+((8+D_SpriteGapX)*3)
+	dc.b	D_SpritePosY
+	dc.b	0
+	blk.l	64,$ffff0000
+	dc.l	0
+
+NullSprite:
+	dc.b	0
+	dc.b	0
+	dc.b	1
+	dc.b	0
+	dc.l	0,0
+       
 ;;;-------------------------------------------------------------------
 ChannelsEqualizerValues:
 	dc.b	0,0,0,0
@@ -609,17 +703,17 @@ Menu:
 	dc.b	0
 	EVEN
 Module1:
-	incbin ice2
+	incbin modules/ice2.fc
 Module2:
-	incbin shaolin.fc
+	incbin modules/shaolin.fc
 Module3:
-	incbin horizon.fc
+	incbin modules/horizon.fc
 Module4:
-	incbin complex.fc
+	incbin modules/complex.fc
 Module5:
-	incbin trsi2.fc
+	incbin modules/trsi2.fc
 Module6:
-	incbin trilogy.fc
+	incbin modules/trilogy.fc
 
 ;;;-------------------------------------------------------------------
 
