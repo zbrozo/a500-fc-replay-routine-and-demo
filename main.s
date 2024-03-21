@@ -31,7 +31,10 @@ D_ScreenOneline = D_ScreenBitplanes*D_ScreenWidthInBytes
         
 D_MessageLineSize = D_ScreenWidthInBytes*D_FontHeight*D_FontBitplanes
 D_MessageScreenSize = D_ScreenBitplaneSize*D_ScreenBitplanes
-D_MenuScreenSize = (D_FontBitmapHeight*D_ScreenWidthInBytes+D_ScreenOneline)*6
+
+D_MenuEntries = 7
+D_MenuRasterLines = D_MenuEntries*9
+D_MenuScreenSize = (D_FontBitmapHeight*D_ScreenWidthInBytes+D_ScreenOneline)*D_MenuEntries
                     
 D_EqScreenHeight = 64
 D_EqScreenWidth = 320
@@ -50,7 +53,7 @@ D_SpriteSize = (D_SpriteHeight+2)*4
 Main:
 	bsr	Start
 
-	lea	Music3,a0
+	lea	Music1,a0
 	jsr	INIT_MUSIC
 
 	move.l	VectorBaseRegister(pc),a0
@@ -106,7 +109,6 @@ Main:
 	bsr	WriteDecValue
 .ok:
 
-*	bsr	ChannelsEqualizer
         bsr     SpriteEqualizer
         bsr	FreqsEqualizer
         bsr     MusicSelector
@@ -114,6 +116,29 @@ Main:
 	btst	#6,$bfe001
 	bne	.loop
 
+        lea     MenuPos(pc),a0
+        move.w  (a0),d0
+        move.w  2(a0),d1
+        cmp.w   d0,d1
+        beq     .loop
+        
+        cmp.w   #D_MenuEntries-1,d0
+        beq.s   .quit
+
+        move.w  d0,2(a0)
+
+        jsr	END_MUSIC
+        
+        lea     MusicPtrs(pc),a0
+        lsl.w   #2,d0
+        adda.w  d0,a0
+        move.l  (a0),a0
+        jsr     INIT_MUSIC
+        
+        bra     .loop
+
+
+.quit:  
 	jsr	END_MUSIC
 	bra	Quit
 
@@ -215,30 +240,8 @@ WaitBlitter:				;wait until blitter is finished
 
 InitCopper:
         bsr     CreateMenuBars
-        
-        lea	MessageScreen,a0
-	lea	CopperBitplanes(pc),a1
-	moveq	#D_ScreenBitplanes-1,d7
-.msg:
-	move.l	a0,d0
-	move.w	d0,6(a1)
-	swap	d0
-	move.w	d0,2(a1)
-	lea	D_ScreenWidthInBytes(a0),a0
-	adda.w	#8,a1
-	dbf	d7,.msg
-
-	lea	MenuScreen,a0
-	lea	CopperMenuBitplanes(pc),a1
-	moveq	#D_ScreenBitplanes-1,d7
-.menu:
-	move.l	a0,d0
-	move.w	d0,6(a1)
-	swap	d0
-	move.w	d0,2(a1)
-	lea	D_ScreenWidthInBytes(a0),a0
-	adda.w	#8,a1
-	dbf	d7,.menu
+        bsr     InitMessageBitplanes
+        bsr     InitMenuBitplanes
         
 	lea	ChannelsEqualizerScreen,a0
 	lea	CopperChannelsEqualizer(pc),a1
@@ -255,7 +258,35 @@ InitCopper:
 	move.w	d0,2(a1)
 
 	rts
+        
+InitMessageBitplanes:   
+        lea	MessageScreen,a0
+	lea	CopperBitplanes(pc),a1
+	moveq	#D_ScreenBitplanes-1,d7
+.l:
+	move.l	a0,d0
+	move.w	d0,6(a1)
+	swap	d0
+	move.w	d0,2(a1)
+	lea	D_ScreenWidthInBytes(a0),a0
+	adda.w	#8,a1
+	dbf	d7,.l
+        rts
 
+InitMenuBitplanes: 
+	lea	MenuScreen,a0
+	lea	CopperMenuBitplanes(pc),a1
+	moveq	#D_ScreenBitplanes-1,d7
+.l:
+	move.l	a0,d0
+	move.w	d0,6(a1)
+	swap	d0
+	move.w	d0,2(a1)
+	lea	D_ScreenWidthInBytes(a0),a0
+	adda.w	#8,a1
+	dbf	d7,.l
+        rts
+        
 InitFontPtrs:
 	lea	Font(pc),a0
 	lea	FontPtrs,a1
@@ -308,8 +339,8 @@ InitSprites:
 	rts
 
 CreateMenuBars:
-        lea     CopperMenuBars,a0
-        moveq   #53,d7
+        lea     CopperMenuBars(pc),a0
+        moveq   #D_MenuRasterLines-1,d7
         move.w  #$180,d0
         move.l  #$7107fffe,d1
 .loop:
@@ -598,8 +629,37 @@ PrintMenu:
         bra.s   .loop
 
 MusicSelector:
+        bsr.s   MenuClearBar
+        bsr.s   MenuReadPosition
+        bsr.s   MenuDrawBar
+        rts
+
+MenuClearBar:   
         lea     CopperMenuBars,a0
-        lea     .cols,a1
+        lea     MenuPos(pc),a1
+
+        moveq   #0,d0
+        move.w  (a1),d0
+        mulu    #8*9,d0
+        adda.w  d0,a0
+        
+        moveq   #0,d0
+        moveq   #7,d7
+.clear:
+        move.w  d0,2(a0)
+        lea     8(a0),a0
+        dbf     d7,.clear
+        rts
+        
+MenuDrawBar:
+        lea     CopperMenuBars(pc),a0
+        lea     MenuPos(pc),a1
+        moveq   #0,d0
+        move.w  (a1),d0
+        mulu    #8*9,d0
+        adda.w  d0,a0
+
+        lea     MenuCols(pc),a1
         moveq   #7,d7
 .loop:
         move.w  (a1)+,2(a0)
@@ -607,8 +667,35 @@ MusicSelector:
         dbf     d7,.loop
         rts
 
-.cols:  dc.w    $7,$a,$d,$f,$f,$d,$a,$7
-
+MenuReadPosition:
+        lea     .delay(pc),a0
+        subq.w  #1,(a0)
+        bpl.s   .end
+        move.w  #8,(a0)
+        
+        lea     MenuPos,a1
+        lea     CUSTOM,a6
+        move.w  JOY0DAT(a6),d0
+        move.w  .mousePos(pc),a0
+        move.w  (a0),d1
+        move.w  d0,(a0)
+        sub.w   d1,d0
+        beq.s   .end
+        bpl.s   .next
+        
+        tst.w   (a1)
+        beq.s   .end
+        subq.w  #1,(a1)
+        bra.s   .end
+ .next:   
+        cmp.w   #D_MenuEntries-1,(a1)
+        beq.s   .end
+        addq.w  #1,(a1)
+ .end:   
+        rts
+.delay: dc.w    0
+.mousePos:
+        dc.w    0
 ;;; **********************************************
 HexToDecTable:	dc.b	0,1,2,3,4,5,6,7,8,9,$10,$11,$12,$13,$14,$15
 
@@ -617,6 +704,9 @@ Message2:	dc.b	"MAXIMAL REPLAY RASTER TIME:",0
 Message3:	dc.b	"CURRENT REPLAY RASTER TIME:",0
 		EVEN
 
+MenuCols:  	dc.w    $7,$a,$d,$f,$f,$d,$a,$7
+MenuPos:        dc.w    0       	; 
+                dc.w    0		; previous position
 MenuText:
 	dc.b	"MUSIC 1",0
 	dc.b	"MUSIC 2",0
@@ -624,6 +714,7 @@ MenuText:
 	dc.b	"MUSIC 4",0
 	dc.b	"MUSIC 5",0
 	dc.b	"MUSIC 6",0
+	dc.b	"EXIT DEMO",0
 	dc.b	0
 	EVEN
         
@@ -711,11 +802,11 @@ CopperMenuBitplanes:
 	dc.w	$0188,$0c50,$018a,$0a41,$018c,$0930,$018e,$0720
 
 CopperMenuBars:
-        blk.l   54*2,0
-        
-        dc.w    $a607,$fffe
+        blk.l   D_MenuRasterLines*2,0
 
         dc.w    $100,0
+        
+        dc.w    $b007,$fffe
         
 	dc.w	D_PlayerWaitRaster*$100+7,$fffe
 	dc.w	$9c,$8010		; int request
@@ -795,6 +886,9 @@ FreqsEqualizerValues:
 Font:
 	incbin	font1x1x3.rawblit
 
+FontColors:     
+	dc.w	$0fd3,$0f92,$0e72,$0c50,$0a41,$0930,$0720
+        
 MusicPtrs:
         dc.l    Music1
         dc.l    Music2
