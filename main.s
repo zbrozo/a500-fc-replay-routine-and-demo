@@ -21,7 +21,8 @@ D_FontHeight = 8
 D_FontBitmapWidthInBytes = 40
 D_FontBitmapHeight = D_FontHeight*D_FontBitplanes
 D_FontBitplaneSize = D_FontBitmapWidthInBytes*D_FontBitmapHeight
-
+D_FontColors = 8
+        
 D_ScreenWidth = 320
 D_ScreenWidthInBytes = (D_ScreenWidth/8)
 D_ScreenHeight = 8*3
@@ -33,7 +34,7 @@ D_MessageLineSize = D_ScreenWidthInBytes*D_FontHeight*D_FontBitplanes
 D_MessageScreenSize = D_ScreenBitplaneSize*D_ScreenBitplanes
 
 D_MenuEntries = 7
-D_MenuRasterLines = D_MenuEntries*9
+D_MenuRasterLines = D_MenuEntries*(D_FontHeight+1)
 D_MenuScreenSize = (D_FontBitmapHeight*D_ScreenWidthInBytes+D_ScreenOneline)*D_MenuEntries
                     
 D_EqScreenHeight = 64
@@ -61,7 +62,6 @@ Main:
 
 	bsr	InitCopper
 	bsr	InitFontPtrs
-        bsr     InitSprites
         
         bsr     PrintMenu
         bsr     PrintReplayTimeMessages
@@ -134,10 +134,7 @@ Main:
         adda.w  d0,a0
         move.l  (a0),a0
         jsr     INIT_MUSIC
-        
         bra     .loop
-
-
 .quit:  
 	jsr	END_MUSIC
 	bra	Quit
@@ -239,9 +236,14 @@ WaitBlitter:				;wait until blitter is finished
 	rts
 
 InitCopper:
-        bsr     CreateMenuBars
+        bsr     InitSprites
+        bsr     InitEqualizerSprites
+
         bsr     InitMessageBitplanes
+
         bsr     InitMenuBitplanes
+        bsr     InitMenuBars
+        bsr     InitMenuColors
         
 	lea	ChannelsEqualizerScreen,a0
 	lea	CopperChannelsEqualizer(pc),a1
@@ -323,11 +325,13 @@ InitSprites:
         addq.w  #8,a0
         adda.w  #D_SpriteSize,a1	; next sprite
         dbf     d7,.l
-        
+        rts
+
+InitEqualizerSprites:
 	lea	CopperSprites(pc),a0
 	lea     EqualizerSprites(pc),a1
         moveq   #3,d7
-.l2:     
+.l:     
         move.l  a1,d0
 	move.w	d0,6(a0)
 	swap	d0
@@ -335,22 +339,53 @@ InitSprites:
 
         addq.w  #8,a0
         adda.w  #D_SpriteSize,a1	; next sprite
-        dbf     d7,.l2
+        dbf     d7,.l
 	rts
 
-CreateMenuBars:
+InitMenuBars:
         lea     CopperMenuBars(pc),a0
         moveq   #D_MenuRasterLines-1,d7
-        move.w  #$180,d0
+        move.l  #$01800000,d0
         move.l  #$7107fffe,d1
-.loop:
-        move.w  d0,(a0)+
-        addq.w  #2,a0
         
+        moveq   #0,d2
+.loop:
+        subq.w  #1,d2
+        bpl.s   .ok
+        move.w  #D_FontHeight,d2
+
+        move.l  #$01820000,d3
+        moveq   #D_FontColors-2,d6
+.c:     move.l  d3,(a0)+
+        add.l   #$00020000,d3
+        dbf     d6,.c
+
+.ok:    
+        move.l  d0,(a0)+
         move.l  d1,(a0)+
         add.l   #$01000000,d1
-        
+
         dbf     d7,.loop
+        rts
+
+InitMenuColors:
+        lea     CopperMenuBars(pc),a0
+        moveq   #D_MenuEntries-1,d6
+.l:
+        bsr.s   SetFontColors
+        lea     (8*(D_FontHeight+1))(a0),a0
+        dbf     d6,.l
+        rts
+        
+SetFontColors:  
+        lea     FontColors(pc),a1
+        addq.w  #2,a1
+        
+        moveq   #D_FontColors-2,d7
+.l:
+        move.w  (a1)+,2(a0)
+        addq.w  #4,a0
+        dbf     d7,.l
         rts
         
 ;;; a0 - screen
@@ -607,6 +642,7 @@ PrintReplayTimeMessages:
 PrintMenu:
         lea     MenuText(pc),a1
 	lea	MenuScreen,a6
+        adda.w  #D_ScreenOneline,a6
 .loop:  
         tst.b   (a1)
         bne.s   .print
@@ -636,17 +672,19 @@ MusicSelector:
 
 MenuClearBar:   
         lea     CopperMenuBars,a0
+        adda.w  #D_FontColors*4,a0
+
         lea     MenuPos(pc),a1
 
         moveq   #0,d0
         move.w  (a1),d0
-        mulu    #8*9,d0
+        mulu    #((D_FontColors-1)*4)+(8*9),d0
         adda.w  d0,a0
         
         moveq   #0,d0
         moveq   #7,d7
 .clear:
-        move.w  d0,2(a0)
+        move.w  d0,6(a0)
         lea     8(a0),a0
         dbf     d7,.clear
         rts
@@ -656,22 +694,25 @@ MenuDrawBar:
         lea     MenuPos(pc),a1
         moveq   #0,d0
         move.w  (a1),d0
-        mulu    #8*9,d0
+        mulu    #((D_FontColors-1)*4)+(8*9),d0
         adda.w  d0,a0
-
+        
+        bsr     SetFontColors
+        addq.w  #4,a0
+        
         lea     MenuCols(pc),a1
         moveq   #7,d7
 .loop:
-        move.w  (a1)+,2(a0)
+        move.w  (a1)+,6(a0)
         lea     8(a0),a0
         dbf     d7,.loop
         rts
-
+        
 MenuReadPosition:
         lea     .delay(pc),a0
         subq.w  #1,(a0)
         bpl.s   .end
-        move.w  #8,(a0)
+        move.w  #16,(a0)
         
         lea     MenuPos,a1
         lea     CUSTOM,a6
@@ -798,17 +839,14 @@ CopperMenuBitplanes:
 
         dc.w	$100,$3200
 
-	dc.w	$0182,$0fd3,$0184,$0f92,$0186,$0e72
-	dc.w	$0188,$0c50,$018a,$0a41,$018c,$0930,$018e,$0720
-
 CopperMenuBars:
-        blk.l   D_MenuRasterLines*2,0
+        blk.l   (D_MenuRasterLines*2)+(D_MenuEntries*(D_FontColors-1)),0
 
         dc.w    $100,0
         
         dc.w    $b007,$fffe
         
-	dc.w	D_PlayerWaitRaster*$100+7,$fffe
+	*dc.w	D_PlayerWaitRaster*$100+7,$fffe
 	dc.w	$9c,$8010		; int request
 
 	dc.w	$d807,$fffe
@@ -887,7 +925,7 @@ Font:
 	incbin	font1x1x3.rawblit
 
 FontColors:     
-	dc.w	$0fd3,$0f92,$0e72,$0c50,$0a41,$0930,$0720
+	dc.w	0,$0fd3,$0f92,$0e72,$0c50,$0a41,$0930,$0720
         
 MusicPtrs:
         dc.l    Music1
