@@ -27,9 +27,11 @@ D_ScreenWidthInBytes = (D_ScreenWidth/8)
 D_ScreenHeight = 8*3
 D_ScreenBitplaneSize = D_ScreenWidthInBytes*D_ScreenHeight
 D_ScreenBitplanes = 3
-
+D_ScreenOneline = D_ScreenBitplanes*D_ScreenWidthInBytes
+        
 D_MessageLineSize = D_ScreenWidthInBytes*D_FontHeight*D_FontBitplanes
 D_MessageScreenSize = D_ScreenBitplaneSize*D_ScreenBitplanes
+D_MenuScreenSize = (D_FontBitmapHeight*D_ScreenWidthInBytes+D_ScreenOneline)*6
                     
 D_EqScreenHeight = 64
 D_EqScreenWidth = 320
@@ -43,12 +45,12 @@ D_SpritePosX = 64
 D_SpriteGapX = 1
 D_SpriteHeight = 64
 D_SpritePosY = $30+(D_SpriteHeight/2)
-D_SpriteSize = (64+2)*4
+D_SpriteSize = (D_SpriteHeight+2)*4
              
 Main:
 	bsr	Start
 
-	lea	Module2,a0
+	lea	Music3,a0
 	jsr	INIT_MUSIC
 
 	move.l	VectorBaseRegister(pc),a0
@@ -58,22 +60,8 @@ Main:
 	bsr	InitFontPtrs
         bsr     InitSprites
         
-	lea	Message1(pc),a1
-	bsr	GetTextLen
-	lea	MessageScreen,a0
-	bsr	WriteTextLine
-
-	lea	Message2(pc),a1
-	bsr	GetTextLen
-	lea	MessageScreen,a0
-	adda.w	#D_MessageLineSize,a0
-	bsr	WriteTextLine
-
-	lea	Message3(pc),a1
-	bsr	GetTextLen
-	lea	MessageScreen,a0
-	adda.w	#D_MessageLineSize*2,a0
-	bsr	WriteTextLine
+        bsr     PrintMenu
+        bsr     PrintReplayTimeMessages
 
 	lea	CUSTOM,a6
 	move.w	#$83e0,DMACON(a6)
@@ -121,7 +109,8 @@ Main:
 *	bsr	ChannelsEqualizer
         bsr     SpriteEqualizer
         bsr	FreqsEqualizer
-
+        bsr     MusicSelector
+        
 	btst	#6,$bfe001
 	bne	.loop
 
@@ -225,18 +214,32 @@ WaitBlitter:				;wait until blitter is finished
 	rts
 
 InitCopper:
-	lea	MessageScreen,a0
+        bsr     CreateMenuBars
+        
+        lea	MessageScreen,a0
 	lea	CopperBitplanes(pc),a1
 	moveq	#D_ScreenBitplanes-1,d7
-.l:
+.msg:
 	move.l	a0,d0
 	move.w	d0,6(a1)
 	swap	d0
 	move.w	d0,2(a1)
 	lea	D_ScreenWidthInBytes(a0),a0
 	adda.w	#8,a1
-	dbf	d7,.l
+	dbf	d7,.msg
 
+	lea	MenuScreen,a0
+	lea	CopperMenuBitplanes(pc),a1
+	moveq	#D_ScreenBitplanes-1,d7
+.menu:
+	move.l	a0,d0
+	move.w	d0,6(a1)
+	swap	d0
+	move.w	d0,2(a1)
+	lea	D_ScreenWidthInBytes(a0),a0
+	adda.w	#8,a1
+	dbf	d7,.menu
+        
 	lea	ChannelsEqualizerScreen,a0
 	lea	CopperChannelsEqualizer(pc),a1
 	move.l	a0,d0
@@ -303,6 +306,21 @@ InitSprites:
         adda.w  #D_SpriteSize,a1	; next sprite
         dbf     d7,.l2
 	rts
+
+CreateMenuBars:
+        lea     CopperMenuBars,a0
+        moveq   #53,d7
+        move.w  #$180,d0
+        move.l  #$7107fffe,d1
+.loop:
+        move.w  d0,(a0)+
+        addq.w  #2,a0
+        
+        move.l  d1,(a0)+
+        add.l   #$01000000,d1
+        
+        dbf     d7,.loop
+        rts
         
 ;;; a0 - screen
 ;;; a1 - text
@@ -534,16 +552,81 @@ FreqsEqualizerDecrease:
 	addq.w	#1,a1
 	addq.w	#1,a2
 	dbf	d7,.loop
-	rts
+        rts
+
+PrintReplayTimeMessages:
+        lea	Message1(pc),a1
+	bsr	GetTextLen
+	lea	MessageScreen,a0
+	bsr	WriteTextLine
+
+	lea	Message2(pc),a1
+	bsr	GetTextLen
+	lea	MessageScreen,a0
+	adda.w	#D_MessageLineSize,a0
+	bsr	WriteTextLine
+
+	lea	Message3(pc),a1
+	bsr	GetTextLen
+	lea	MessageScreen,a0
+	adda.w	#D_MessageLineSize*2,a0
+	bsr	WriteTextLine
+        rts
+
+PrintMenu:
+        lea     MenuText(pc),a1
+	lea	MenuScreen,a6
+.loop:  
+        tst.b   (a1)
+        bne.s   .print
+        rts
+.print: 
+        bsr     GetTextLen
+
+        move.w  #40,d6
+        sub.w   d7,d6
+        lsr.w   #1,d6
+
+        move.l  a6,a0
+        adda.w  d6,a0
+        
+	bsr	WriteTextLine
+
+        addq.w  #1,a1
+        adda.w	#D_MessageLineSize+D_ScreenOneline,a6
+        
+        bra.s   .loop
+
+MusicSelector:
+        lea     CopperMenuBars,a0
+        lea     .cols,a1
+        moveq   #7,d7
+.loop:
+        move.w  (a1)+,2(a0)
+        lea     8(a0),a0
+        dbf     d7,.loop
+        rts
+
+.cols:  dc.w    $7,$a,$d,$f,$f,$d,$a,$7
 
 ;;; **********************************************
 HexToDecTable:	dc.b	0,1,2,3,4,5,6,7,8,9,$10,$11,$12,$13,$14,$15
 
-Message1:	dc.b	"MINIMUM REPLAY RASTER TIME:",0
-Message2:	dc.b	"MAXIMUM REPLAY RASTER TIME:",0
+Message1:	dc.b	"MINIMAL REPLAY RASTER TIME:",0
+Message2:	dc.b	"MAXIMAL REPLAY RASTER TIME:",0
 Message3:	dc.b	"CURRENT REPLAY RASTER TIME:",0
 		EVEN
 
+MenuText:
+	dc.b	"MUSIC 1",0
+	dc.b	"MUSIC 2",0
+	dc.b	"MUSIC 3",0
+	dc.b	"MUSIC 4",0
+	dc.b	"MUSIC 5",0
+	dc.b	"MUSIC 6",0
+	dc.b	0
+	EVEN
+        
 FontCodePage852:
 	dc.b 00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
 	;;
@@ -591,14 +674,16 @@ Copper:
 
 CopperSprites:
         blk.l   16,0
-
         
 	dc.w	$108,0
 	dc.w	$10a,0
 	dc.w	$102,0		       
 
 	dc.w	$180,0
-
+        
+        ;; sprite colors
+	dc.w	$01a2,$fff
+	dc.w	$01aa,$fff
         
 	dc.w	$3007,$fffe
 CopperChannelsEqualizer:
@@ -606,24 +691,38 @@ CopperChannelsEqualizer:
 	dc.w	$e2,0
 	dc.w	$100,$1200
 	dc.w	$182,$fff
+        
 	dc.w	$7007,$fffe
+        
+	dc.w	$108,D_ScreenWidthInBytes*(D_ScreenBitplanes-1)
+	dc.w	$10a,D_ScreenWidthInBytes*(D_ScreenBitplanes-1)
+        
+CopperMenuBitplanes:
+	dc.w	$e0,0
+	dc.w	$e2,0
+	dc.w	$e4,0
+	dc.w	$e6,0
+	dc.w	$e8,0
+	dc.w	$ea,0
 
-	dc.w	$0180,D_BackgroundColor
+        dc.w	$100,$3200
 
 	dc.w	$0182,$0fd3,$0184,$0f92,$0186,$0e72
 	dc.w	$0188,$0c50,$018a,$0a41,$018c,$0930,$018e,$0720
 
-        ;; sprite colors
-	dc.w	$01a2,$fff
-	dc.w	$01aa,$fff
+CopperMenuBars:
+        blk.l   54*2,0
         
-	dc.w	$100,0
+        dc.w    $a607,$fffe
 
+        dc.w    $100,0
+        
 	dc.w	D_PlayerWaitRaster*$100+7,$fffe
 	dc.w	$9c,$8010		; int request
 
 	dc.w	$d807,$fffe
-	dc.w	$108,D_ScreenWidthInBytes*(D_ScreenBitplanes-1)
+
+        dc.w	$108,D_ScreenWidthInBytes*(D_ScreenBitplanes-1)
 	dc.w	$10a,D_ScreenWidthInBytes*(D_ScreenBitplanes-1)
 
 CopperBitplanes:
@@ -656,28 +755,28 @@ EqualizerSprites:
 	dc.b	D_SpritePosX
 	dc.b	D_SpritePosY
 	dc.b	0
-	blk.l	64,$ffff0000
+	blk.l	D_SpriteHeight,$ffff0000
 	dc.l    0
 
         dc.b	D_SpritePosY-1
 	dc.b	D_SpritePosX+8+D_SpriteGapX
 	dc.b	D_SpritePosY
 	dc.b	0
-	blk.l	64,$ffff0000
+	blk.l	D_SpriteHeight,$ffff0000
 	dc.l	0
 
         dc.b	D_SpritePosY-1
 	dc.b	D_SpritePosX+((8+D_SpriteGapX)*2)
 	dc.b	D_SpritePosY
 	dc.b	0
-	blk.l	64,$ffff0000
+	blk.l	D_SpriteHeight,$ffff0000
 	dc.l	0
 
         dc.b	D_SpritePosY-1
 	dc.b	D_SpritePosX+((8+D_SpriteGapX)*3)
 	dc.b	D_SpritePosY
 	dc.b	0
-	blk.l	64,$ffff0000
+	blk.l	D_SpriteHeight,$ffff0000
 	dc.l	0
 
 NullSprite:
@@ -696,23 +795,25 @@ FreqsEqualizerValues:
 Font:
 	incbin	font1x1x3.rawblit
 
-
-Menu:
-	dc.b	"   ice2   "
-	dc.b	"          "
-	dc.b	0
-	EVEN
-Module1:
+MusicPtrs:
+        dc.l    Music1
+        dc.l    Music2
+        dc.l    Music3
+        dc.l    Music4
+        dc.l    Music5
+        dc.l    Music6
+        
+Music1:
 	incbin modules/ice2.fc
-Module2:
+Music2:
 	incbin modules/shaolin.fc
-Module3:
+Music3:
 	incbin modules/horizon.fc
-Module4:
+Music4:
 	incbin modules/complex.fc
-Module5:
+Music5:
 	incbin modules/trsi2.fc
-Module6:
+Music6:
 	incbin modules/trilogy.fc
 
 ;;;-------------------------------------------------------------------
@@ -727,5 +828,6 @@ ChannelsEqualizerScreen:
 	ds.b	D_EqScreenSize
 FreqsEqualizerScreen:
 	ds.b	D_EqScreenSize
-
+MenuScreen:
+        ds.b    D_MenuScreenSize
         
