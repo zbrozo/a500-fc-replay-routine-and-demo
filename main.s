@@ -2,7 +2,7 @@
 ;;; Demo with refactored FutureComposer1.4 replay routine and equalizers
 ;;; Coded by Zbrozo aka Bishop/Turnips 2024
 ;;;-------------------------------------------------------------------
-
+	incdir ZPRJ:fc/
 	section main,code_c
 
 	bra	Main
@@ -36,7 +36,8 @@ D_MessageScreenSize = D_ScreenBitplaneSize*D_ScreenBitplanes
 D_MenuEntries = 7
 D_MenuRasterLines = D_MenuEntries*(D_FontHeight+1)
 D_MenuScreenSize = (D_FontBitmapHeight*D_ScreenWidthInBytes+D_ScreenOneline)*D_MenuEntries
-                    
+D_MenuCopperEntrySize = ((D_FontColors+1)*(D_FontHeight+1))*4
+                      
 D_EqScreenHeight = 64
 D_EqScreenWidth = 320
 D_EqScreenWidthInBytes = D_EqScreenWidth/8
@@ -108,25 +109,27 @@ Main:
 	adda.w	d7,a0
 	bsr	WriteDecValue
 .ok:
-
         bsr     SpriteEqualizer
         bsr	FreqsEqualizer
         bsr     MusicSelector
+        bsr     MenuFade
         
 	btst	#6,$bfe001
 	bne	.loop
 
-        lea     MenuPos(pc),a0
-        move.w  (a0),d0
-        move.w  2(a0),d1
+        lea     MenuPos(pc),a5
+        move.w  (a5),d0
+        move.w  2(a5),d1
         cmp.w   d0,d1
         beq     .loop
         
         cmp.w   #D_MenuEntries-1,d0
         beq.s   .quit
 
-        move.w  d0,2(a0)
+        move.w  d0,2(a5)
 
+        bsr     MenuRestoreSelection
+        
         jsr	END_MUSIC
         
         lea     MusicPtrs(pc),a0
@@ -345,49 +348,41 @@ InitEqualizerSprites:
 InitMenuBars:
         lea     CopperMenuBars(pc),a0
         moveq   #D_MenuRasterLines-1,d7
-        move.l  #$01800000,d0
-        move.l  #$7107fffe,d1
-        
-        moveq   #0,d2
+        move.l  #$7107fffe,d0
 .loop:
-        subq.w  #1,d2
-        bpl.s   .ok
-        move.w  #D_FontHeight,d2
 
-        move.l  #$01820000,d3
-        moveq   #D_FontColors-2,d6
-.c:     move.l  d3,(a0)+
-        add.l   #$00020000,d3
+        move.l  #$01800000,d1
+        moveq   #D_FontColors-1,d6
+.c:     move.l  d1,(a0)+
+        add.l   #$00020000,d1
         dbf     d6,.c
 
-.ok:    
         move.l  d0,(a0)+
-        move.l  d1,(a0)+
-        add.l   #$01000000,d1
+        add.l   #$01000000,d0
 
         dbf     d7,.loop
         rts
 
 InitMenuColors:
         lea     CopperMenuBars(pc),a0
-        moveq   #D_MenuEntries-1,d6
+        moveq   #D_MenuEntries*(D_FontHeight+1)-1,d6
 .l:
+       
         bsr.s   SetFontColors
-        lea     (8*(D_FontHeight+1))(a0),a0
+        addq.w  #4,a0
         dbf     d6,.l
         rts
-        
+
+;;; a0 - copper registers array
 SetFontColors:  
         lea     FontColors(pc),a1
-        addq.w  #2,a1
-        
-        moveq   #D_FontColors-2,d7
+        moveq   #D_FontColors-1,d7
 .l:
         move.w  (a1)+,2(a0)
         addq.w  #4,a0
         dbf     d7,.l
         rts
-        
+
 ;;; a0 - screen
 ;;; a1 - text
 ;;; d7 - text len
@@ -666,46 +661,59 @@ PrintMenu:
 
 MusicSelector:
         bsr.s   MenuClearBar
-        bsr.s   MenuReadPosition
+        bsr     MenuReadPosition
         bsr.s   MenuDrawBar
         rts
 
 MenuClearBar:   
         lea     CopperMenuBars,a0
-        adda.w  #D_FontColors*4,a0
+        adda.w  #(D_FontColors+1)*4,a0
 
         lea     MenuPos(pc),a1
 
         moveq   #0,d0
         move.w  (a1),d0
-        mulu    #((D_FontColors-1)*4)+(8*9),d0
+        mulu    #D_MenuCopperEntrySize,d0
         adda.w  d0,a0
-        
+
         moveq   #0,d0
         moveq   #7,d7
 .clear:
-        move.w  d0,6(a0)
-        lea     8(a0),a0
+        move.w  d0,2(a0)
+        lea     ((D_FontColors+1)*4)(a0),a0
         dbf     d7,.clear
         rts
         
 MenuDrawBar:
         lea     CopperMenuBars(pc),a0
+	adda.w	#(D_FontColors+1)*4,a0
         lea     MenuPos(pc),a1
+
         moveq   #0,d0
         move.w  (a1),d0
-        mulu    #((D_FontColors-1)*4)+(8*9),d0
+        mulu    #D_MenuCopperEntrySize,d0
         adda.w  d0,a0
-        
-        bsr     SetFontColors
-        addq.w  #4,a0
         
         lea     MenuCols(pc),a1
         moveq   #7,d7
 .loop:
-        move.w  (a1)+,6(a0)
-        lea     8(a0),a0
+        move.w  (a1)+,2(a0)
+        lea     ((D_FontColors+1)*4)(a0),a0
         dbf     d7,.loop
+        rts
+
+;;; d1 - position in menu
+MenuRestoreSelection:
+        lea     CopperMenuBars(pc),a0
+        adda.w	#(D_FontColors+1)*4,a0
+        mulu    #D_MenuCopperEntrySize,d1
+        adda.w  d1,a0
+
+        moveq   #D_FontHeight-1,d6
+.l:     
+        bsr     SetFontColors
+        adda.w  #4,a0
+        dbf     d6,.l
         rts
         
 MenuReadPosition:
@@ -737,6 +745,71 @@ MenuReadPosition:
 .delay: dc.w    0
 .mousePos:
         dc.w    0
+
+
+MenuFade:
+        lea     .delay(pc),a0
+        subq.w  #1,(a0)
+        bpl.s   .end
+        move.w  #8,(a0)
+        
+        lea     CopperMenuBars(pc),a0
+	adda.w	#(D_FontColors+1)*4,a0
+        
+        lea     MenuPos(pc),a1
+        move.w  2(a1),d0
+        mulu    #D_MenuCopperEntrySize,d0
+        adda.w  d0,a0
+
+        moveq   #D_FontHeight-1,d6
+
+        addq.w  #4,a0
+.bars:     
+        moveq   #8-2,d7
+.color:    
+        move.w  2(a0),d0
+        bsr     MenuColorFadeUp
+        move.w  d2,2(a0)
+        
+        addq.w  #4,a0
+        dbf     d7,.color
+        addq.w  #8,a0
+        dbf     d6,.bars
+.end:   
+        rts
+
+.delay: dc.w    0
+        
+MenuColorFadeUp:
+        moveq   #0,d2
+        move.w  d0,d1
+        and.w   #$f00,d1
+        cmp.w   #$f00,d1
+        beq.s   .ok1
+        add.w   #$100,d1
+.ok1:
+        or.w    d1,d2
+
+        move.w  d0,d1
+        and.w   #$f0,d1
+        cmp.w   #$f0,d1
+        beq.s   .ok2
+        add.w   #$10,d1
+.ok2:   
+        or.w    d1,d2
+
+        move.w  d0,d1
+        and.w   #$f,d1
+        cmp.w   #$f,d1
+        beq.s   .ok3
+        add.w   #$1,d1
+.ok3:   
+        or.w    d1,d2
+
+        rts
+        
+MenuFadeDown:
+        rts
 ;;; **********************************************
 HexToDecTable:	dc.b	0,1,2,3,4,5,6,7,8,9,$10,$11,$12,$13,$14,$15
 
@@ -840,7 +913,7 @@ CopperMenuBitplanes:
         dc.w	$100,$3200
 
 CopperMenuBars:
-        blk.l   (D_MenuRasterLines*2)+(D_MenuEntries*(D_FontColors-1)),0
+        blk.l   (D_MenuRasterLines*(1+D_FontColors)),0
 
         dc.w    $100,0
         
@@ -936,7 +1009,7 @@ MusicPtrs:
         dc.l    Music6
         
 Music1:
-	incbin modules/ice2.fc
+	incbin modules/fraxion.fc
 Music2:
 	incbin modules/shaolin.fc
 Music3:
