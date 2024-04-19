@@ -120,13 +120,19 @@ Main:
         lea     MenuPos(pc),a5
         move.w  (a5),d0
         move.w  2(a5),d1
+        move.w  d0,2(a5)
+
+        add.w   #(D_FontHeight+1)/2,d0
+        add.w   #(D_FontHeight+1)/2,d1
+        
+        divu    #(D_FontHeight+1),d0
+        divu    #(D_FontHeight+1),d1
+        
         cmp.w   d0,d1
         beq     .loop
         
         cmp.w   #D_MenuEntries-1,d0
         beq.s   .quit
-
-        move.w  d0,2(a5)
 
         bsr     MenuRestoreSelection
         
@@ -492,62 +498,6 @@ SpriteEqualizer:
 	sub.b	#1,2(a1)
 .end:   
         rts
-        
-; ChannelsEqualizer:
-; 	lea	FC_VoicesInfo(pc),a0
-; 	lea	ChannelsEqualizerScreen,a1
-; 	lea	ChannelsEqualizerValues,a2
-; 	lea	FC_PlayInfo(pc),a3
-; 	moveq	#0,d6
-; 	moveq	#FC_CHANNELS-1,d7
-; .loop:
-
-; 	move.w	FC_PlayInfo_ChannelBitMask(a3),d1
-; 	btst	d6,d1
-; 	beq.s	.nosound
-
-; 	move.w	FC_VOICE_RepeatStartAndLengthDelay(a0),d1
-; 	beq.s	.nosound
-
-; 	moveq	#D_EqScreenHeight,d1
-; 	move.b	d1,(a2)
-
-; 	move.l	a1,a4
-; 	move.w	d6,d0
-; 	add.w	d0,d0
-; 	adda.w	d0,a4
-
-; 	move.w	#$fff0,d0
-; 	subq.w	#1,d1
-; .draw:
-; 	move.w	d0,(a4)
-; 	lea	D_EqScreenWidthInBytes(a4),a4
-; 	dbf	d1,.draw
-; 	bra.s	.ok
-
-; .nosound:
-; 	move.b	(a2),d1
-; 	beq.s	.ok
-
-; 	move.l	a1,a4
-; 	move.w	d6,d0
-; 	add.w	d0,d0
-; 	adda.w	d0,a4
-
-; 	moveq	#D_EqScreenHeight,d2
-; 	sub.b	d1,d2
-; 	mulu	#D_EqScreenWidthInBytes,d2
-; 	adda.w	d2,a4
-; 	move.w	#0,(a4)
-
-; 	subq.b	#1,d1
-; 	move.b	d1,(a2)
-; .ok:
-; 	lea	FC_VOICE_SIZE(a0),a0
-; 	addq.b	#1,d6
-; 	addq.w	#1,a2
-; 	dbf	d7,.loop
-; 	rts
 
 FreqsEqualizer:
 	bsr.s	FreqsEqualizerDecrease
@@ -673,7 +623,7 @@ MenuClearBar:
 
         moveq   #0,d0
         move.w  (a1),d0
-        mulu    #D_MenuCopperEntrySize,d0
+        mulu    #(D_FontColors+1)*4,d0
         adda.w  d0,a0
 
         moveq   #0,d0
@@ -687,11 +637,12 @@ MenuClearBar:
 MenuDrawBar:
         lea     CopperMenuBars(pc),a0
 	adda.w	#(D_FontColors+1)*4,a0
+        
         lea     MenuPos(pc),a1
 
         moveq   #0,d0
         move.w  (a1),d0
-        mulu    #D_MenuCopperEntrySize,d0
+        mulu    #(D_FontColors+1)*4,d0
         adda.w  d0,a0
         
         lea     MenuCols(pc),a1
@@ -717,64 +668,90 @@ MenuRestoreSelection:
         rts
         
 MenuReadPosition:
-        lea     .delay(pc),a0
-        subq.w  #1,(a0)
-        bpl.s   .end
-        move.w  #16,(a0)
+*        lea     .delay(pc),a0
+*        subq.w  #1,(a0)
+*        bpl.s   .end
+*        move.w  #0,(a0)
         
-        lea     MenuPos,a1
+        lea     MenuPos(pc),a1
         lea     CUSTOM,a6
         move.w  JOY0DAT(a6),d0
-        move.w  .mousePos(pc),a0
-        move.w  (a0),d1
-        move.w  d0,(a0)
-        sub.w   d1,d0
-        beq.s   .end
-        bpl.s   .next
+        lsr.w   #8,d0
         
-        tst.w   (a1)
+        move.w  d0,d1
+        
+        move.w  .mousePos(pc),a0
+        sub.w   (a0),d0
         beq.s   .end
-        subq.w  #1,(a1)
-        bra.s   .end
- .next:   
-        cmp.w   #D_MenuEntries-1,(a1)
-        beq.s   .end
-        addq.w  #1,(a1)
- .end:   
+
+        move.w  d1,(a0)
+        
+        cmp.w   #-128,d0
+        blt.s   .mouse_low_range
+        
+        cmp.w   #127,d0
+        bgt.s   .mouse_high_range
+
+.calc:  
+        add.w   (a1),d0
+        bpl.s   .ok1
+        move.w  #0,d0
+        bra.s   .ok2
+.ok1:   
+        cmp.w   #(D_MenuEntries-1)*(D_FontHeight+1),d0
+        ble.s   .ok2
+        move.w  #(D_MenuEntries-1)*(D_FontHeight+1),d0
+.ok2:
+        move.w  d0,(a1)
+.end:   
         rts
+
+.mouse_low_range:
+        add.w   #256,d0
+        bra.s   .calc
+
+.mouse_high_range:
+        sub.w   #256,d0
+        bra.s   .calc
+        
 .delay: dc.w    0
 .mousePos:
         dc.w    0
 
-
 MenuFade:
+        
         lea     .delay(pc),a0
         subq.w  #1,(a0)
         bpl.s   .end
-        move.w  #8,(a0)
+        move.w  #4,(a0)
         
         lea     CopperMenuBars(pc),a0
 	adda.w	#(D_FontColors+1)*4,a0
         
         lea     MenuPos(pc),a1
         move.w  2(a1),d0
+
+        add.w   #(D_FontHeight+1)/2,d0
+        divu    #(D_FontHeight+1),d0        
         mulu    #D_MenuCopperEntrySize,d0
         adda.w  d0,a0
 
-        moveq   #D_FontHeight-1,d6
-
         addq.w  #4,a0
 .bars:     
-        moveq   #8-2,d7
+        moveq   #D_FontColors-2,d7
 .color:    
         move.w  2(a0),d0
         bsr     MenuColorFadeUp
-        move.w  d2,2(a0)
+
+.offset set     0
+        REPT    D_FontHeight
+        move.w  d2,(2+.offset)(a0)
+.offset set     .offset+((D_FontHeight+1)*4)
+        ENDR
         
         addq.w  #4,a0
         dbf     d7,.color
-        addq.w  #8,a0
-        dbf     d6,.bars
+
 .end:   
         rts
 
@@ -808,8 +785,6 @@ MenuColorFadeUp:
 
         rts
         
-MenuFadeDown:
-        rts
 ;;; **********************************************
 HexToDecTable:	dc.b	0,1,2,3,4,5,6,7,8,9,$10,$11,$12,$13,$14,$15
 
@@ -916,6 +891,7 @@ CopperMenuBars:
         blk.l   (D_MenuRasterLines*(1+D_FontColors)),0
 
         dc.w    $100,0
+        dc.w    $180,0
         
         dc.w    $b007,$fffe
         
@@ -1009,7 +985,7 @@ MusicPtrs:
         dc.l    Music6
         
 Music1:
-	incbin modules/fraxion.fc
+	incbin modules/complex.fc
 Music2:
 	incbin modules/shaolin.fc
 Music3:
