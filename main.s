@@ -111,31 +111,32 @@ Main:
 .ok:
         bsr     SpriteEqualizer
         bsr	FreqsEqualizer
+
         bsr     MusicSelector
-        bsr     MenuFade
+        bsr     MusicMenuItemSelect
+        bsr     MusicMenuItemUnselect
         
 	btst	#6,$bfe001
 	bne	.loop
 
         lea     MenuPos(pc),a5
-        move.w  (a5),d0
-        move.w  2(a5),d1
-        move.w  d0,2(a5)
 
+        move.w  (a5),d0
         add.w   #(D_FontHeight+1)/2,d0
-        add.w   #(D_FontHeight+1)/2,d1
-        
         divu    #(D_FontHeight+1),d0
-        divu    #(D_FontHeight+1),d1
+
+        moveq   #0,d1
+        move.b  2(a5),d1
         
-        cmp.w   d0,d1
+        cmp.b   d0,d1
         beq     .loop
-        
-        cmp.w   #D_MenuEntries-1,d0
+
+        move.b  d0,2(a5)
+        move.b  d1,3(a5)
+
+        cmp.b   #D_MenuEntries-1,d0
         beq.s   .quit
 
-        bsr     MenuRestoreSelection
-        
         jsr	END_MUSIC
         
         lea     MusicPtrs(pc),a0
@@ -654,18 +655,18 @@ MenuDrawBar:
         rts
 
 ;;; d1 - position in menu
-MenuRestoreSelection:
-        lea     CopperMenuBars(pc),a0
-        adda.w	#(D_FontColors+1)*4,a0
-        mulu    #D_MenuCopperEntrySize,d1
-        adda.w  d1,a0
+*MenuRestoreSelection:
+*        lea     CopperMenuBars(pc),a0
+*        adda.w	#(D_FontColors+1)*4,a0
+*        mulu    #D_MenuCopperEntrySize,d1
+*        adda.w  d1,a0
 
-        moveq   #D_FontHeight-1,d6
-.l:     
-        bsr     SetFontColors
-        adda.w  #4,a0
-        dbf     d6,.l
-        rts
+*        moveq   #D_FontHeight-1,d6
+*.l:     
+*        bsr     SetFontColors
+*        adda.w  #4,a0
+*        dbf     d6,.l
+*        rts
         
 MenuReadPosition:
 *        lea     .delay(pc),a0
@@ -718,7 +719,7 @@ MenuReadPosition:
 .mousePos:
         dc.w    0
 
-MenuFade:
+MusicMenuItemSelect:
         
         lea     .delay(pc),a0
         subq.w  #1,(a0)
@@ -729,10 +730,12 @@ MenuFade:
 	adda.w	#(D_FontColors+1)*4,a0
         
         lea     MenuPos(pc),a1
-        move.w  2(a1),d0
 
-        add.w   #(D_FontHeight+1)/2,d0
-        divu    #(D_FontHeight+1),d0        
+        moveq   #0,d0
+        move.b  2(a1),d0
+
+        *add.w   #(D_FontHeight+1)/2,d0
+        *divu    #(D_FontHeight+1),d0        
         mulu    #D_MenuCopperEntrySize,d0
         adda.w  d0,a0
 
@@ -741,8 +744,10 @@ MenuFade:
         moveq   #D_FontColors-2,d7
 .color:    
         move.w  2(a0),d0
-        bsr     MenuColorFadeUp
+        move.w  #$fff,d1
 
+        bsr     ColorTransition
+        
 .offset set     0
         REPT    D_FontHeight
         move.w  d2,(2+.offset)(a0)
@@ -756,32 +761,97 @@ MenuFade:
         rts
 
 .delay: dc.w    0
+
+MusicMenuItemUnselect:
+        lea     .delay(pc),a0
+        subq.w  #1,(a0)
+        bpl.s   .end
+        move.w  #4,(a0)
         
-MenuColorFadeUp:
+        lea     CopperMenuBars(pc),a0
+	adda.w	#(D_FontColors+1)*4,a0
+        
+        lea     MenuPos(pc),a1
+
+        moveq   #0,d0
+        move.b  3(a1),d0
+
+        tst.b   d0
+        bmi.b   .end
+        
+        *add.w   #(D_FontHeight+1)/2,d0
+        *divu    #(D_FontHeight+1),d0        
+        mulu    #D_MenuCopperEntrySize,d0
+        adda.w  d0,a0
+
+        addq.w  #4,a0
+
+        lea     FontColors+2(pc),a2
+.bars:     
+        moveq   #D_FontColors-2,d7
+.color:    
+        move.w  2(a0),d0
+        move.w  (a2)+,d1
+
+        bsr     ColorTransition
+        
+.offset set     0
+        REPT    D_FontHeight
+        move.w  d2,(2+.offset)(a0)
+.offset set     .offset+((D_FontHeight+1)*4)
+        ENDR
+        
+        addq.w  #4,a0
+        dbf     d7,.color
+.end:   
+        rts
+.delay: 
+        dc.w    0
+        
+;; d0 - in: source color
+;; d1 - in: dest color
+;; d2 - out: color
+ColorTransition:
         moveq   #0,d2
-        move.w  d0,d1
-        and.w   #$f00,d1
-        cmp.w   #$f00,d1
+
+        move.w  d0,d3
+        move.w  d1,d4
+        and.w   #$f00,d3
+        and.w   #$f00,d4
+        cmp.w   d3,d4
         beq.s   .ok1
-        add.w   #$100,d1
+        bmi.s   .sub1
+        add.w   #$100,d3
+        bra.s   .ok1
+.sub1:  sub.w   #$100,d3
 .ok1:
-        or.w    d1,d2
+        or.w    d3,d2
 
-        move.w  d0,d1
-        and.w   #$f0,d1
-        cmp.w   #$f0,d1
+        move.w  d0,d3
+        move.w  d1,d4
+        and.w   #$f0,d3
+        and.w   #$f0,d4
+        cmp.w   d3,d4
         beq.s   .ok2
-        add.w   #$10,d1
+        bmi.s   .sub2
+        add.w   #$10,d3
+        bra.s   .ok2
+.sub2:  sub.w   #$10,d3
 .ok2:   
-        or.w    d1,d2
+        or.w    d3,d2
 
-        move.w  d0,d1
-        and.w   #$f,d1
-        cmp.w   #$f,d1
+        move.w  d0,d3
+        move.w  d1,d4
+        and.w   #$f,d3
+        and.w   #$f,d4
+        cmp.w   d3,d4
         beq.s   .ok3
-        add.w   #$1,d1
+        bmi.s   .sub3
+        add.w   #$1,d3
+        bra.s   .ok3
+.sub3:  sub.w   #$1,d3
 .ok3:   
-        or.w    d1,d2
+        or.w    d3,d2
 
         rts
         
@@ -794,8 +864,10 @@ Message3:	dc.b	"CURRENT REPLAY RASTER TIME:",0
 		EVEN
 
 MenuCols:  	dc.w    $7,$a,$d,$f,$f,$d,$a,$7
-MenuPos:        dc.w    0       	; 
-                dc.w    0		; previous position
+MenuPos:        dc.w    0
+MenuItem:       dc.b    0		; selected menu item number
+MenuPrevItem:   dc.b    -1              ; previously selected item number
+                
 MenuText:
 	dc.b	"MUSIC 1",0
 	dc.b	"MUSIC 2",0
