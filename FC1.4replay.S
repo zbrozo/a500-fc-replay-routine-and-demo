@@ -1,8 +1,9 @@
 *********************************************************
 **  Amiga FUTURE COMPOSER  »» V1.4 ««  Replay routine  **
 *********************************************************
-** refactored, optimized and fixed by Zbrozo aka Bishop/Turnips 2023-2024
-	
+** refactored, optimized and fixed, replays also older SMOD format  
+** by Zbrozo aka Bishop/Turnips 2023-2024
+*********************************************************	
 ;Doesn't work with V1.0 - V1.3 modules !!
 
 ;; 	move.l $4,a6		;This little routine
@@ -23,6 +24,7 @@
 
 FC_SAMPLES		= 10
 FC_WAVEFORMS		= 80
+FC13_WAVEFORMS		= 48	
 FC_CHANNELS		= 4
 
 FC_MOD_SEQ_SIZE		= 4		; size of sequence table
@@ -34,7 +36,8 @@ FC_MOD_Waveforms	= $24		; long - offset to the first waveform
 FC_MOD_SamplesInfo 	= $28		; data of 10 samples: length.w, repeat start.l
 FC_MOD_WaveformsInfo	= $64		; data of 80 waveforms: length.b
 FC_MOD_SEQ 		= $B4		; sequence lines
-
+FC13_MOD_SEQ		= $64		; sequence lines in FC13
+	
 FC_VOICE_BeginOfSeq	= 0	  	; long
 FC_VOICE_PitchBendStep  = 4	  	; byte
 FC_VOICE_PitchBendSustainTime = 5 	; byte
@@ -104,6 +107,10 @@ FC_INIT:
         bset	#1,$bfe001
 
 	lea	FC_PlayInfo(pc),a5
+	
+	move.l	(a0),d0
+	cmp.l	#'FC14',d0
+	bne.s	FC13_INIT
 
         lea	FC_MOD_SEQ(a0),a1
 	move.l	a1,FC_PlayInfo_SEQptr(a5)
@@ -121,18 +128,53 @@ FC_INIT:
         move.l	a1,FC_PlayInfo_VOLptr(a5)
 
 	move.l	FC_MOD_SEQ_SIZE(a0),d0
+	divu	#13,d0
+	mulu	#13,d0
 
 	bsr.s	FC_InitSamples
-	bsr.s	FC_InitWaveforms
+	bsr	FC_InitWaveforms
 
 	move.l	FC_PlayInfo_SEQptr(a5),a0
-	bsr.s	FC_InitSpeed
+	bsr	FC_InitSpeed
 
         lea	FC_VoicesInfo(pc),a0
 	move.l	FC_PlayInfo_PATptr(a5),a1
 	move.l	FC_PlayInfo_SEQptr(a5),a2
-	bsr.s	FC_InitVoices
+	bsr	FC_InitVoices
 
+	rts
+	
+FC13_INIT:
+	
+        lea	FC13_MOD_SEQ(a0),a1
+	move.l	a1,FC_PlayInfo_SEQptr(a5)
+
+	move.l	a0,a1
+        add.l	FC_MOD_PAT(a0),a1
+        move.l	a1,FC_PlayInfo_PATptr(a5)
+
+        move.l	a0,a1
+        add.l	FC_MOD_FRQ(a0),a1
+        move.l	a1,FC_PlayInfo_FRQptr(a5)
+
+        move.l	a0,a1
+        add.l	FC_MOD_VOL(a0),a1
+        move.l	a1,FC_PlayInfo_VOLptr(a5)
+
+	move.l	FC_MOD_SEQ_SIZE(a0),d0
+	divu	#13,d0
+	mulu	#13,d0
+	
+	bsr.s	FC_InitSamples
+	bsr.s	FC13_InitWaveforms
+	
+	move.l	FC_PlayInfo_SEQptr(a5),a0
+	bsr	FC_InitSpeed
+
+        lea	FC_VoicesInfo(pc),a0
+	move.l	FC_PlayInfo_PATptr(a5),a1
+	move.l	FC_PlayInfo_SEQptr(a5),a2
+	bsr	FC_InitVoices
 	rts
 
 FC_InitSamples:
@@ -150,7 +192,7 @@ FC_InitSamples:
         add.l 	FC_MOD_Samples(a0),d1
         lea	FC_SamplesInfo(pc),a3
         move.l	d1,(a3)+
-        moveq 	#9-1,d3
+        moveq 	#FC_SAMPLES-1,d3
         moveq	#0,d2
 .loop2:
         move.w	(a3),d2		; length
@@ -183,6 +225,23 @@ FC_InitWaveforms:
         dbf	d1,.loop
 	rts
 
+FC13_InitWaveforms:
+        lea 	FC13_WaveformsInfo(pc),a1
+        lea	FC_WaveformsInfo(pc),a2
+        lea	FC13_WAVEFORMS_DATA(pc),a3
+
+        moveq	#FC13_WAVEFORMS-1,d1
+.loop:
+	move.l	a3,d2
+	add.l	(a1)+,d2
+        move.l	d2,(a2)+	; address of waveform
+	move.w	(a1)+,(a2)+	; length
+        move.w	(a1)+,(a2)+	; repeat start
+        move.w	(a1)+,(a2)+	; repeat length
+        addq.w	#6,a2		; next waveform info
+	dbf	d1,.loop
+	rts
+	
 ;;; in: a0 - seq ptr
 FC_InitSpeed:
         moveq	#0,d2
@@ -528,6 +587,11 @@ FC_Effects:
 	dc.w	.cmdE8newsustain-.cmds	;E8
 	dc.w	.cmdE9newsample-.cmds	;E9
 	dc.w	.cmdEApitchbend-.cmds	;EA
+	dc.w	FC_VOLUfx-.cmds		
+	dc.w	FC_VOLUfx-.cmds		
+	dc.w	FC_VOLUfx-.cmds		
+	dc.w	FC_VOLUfx-.cmds		
+	dc.w	FC_VOLUfx-.cmds		
 
 ;;; ----------------------------------
 ;;; Freq commands
@@ -697,6 +761,11 @@ FC_VOLUfx:
 	dc.b	.cmdE8volumeSustain-.cmds 	;E8
 	dc.b	.calcperiod-.cmds		;not used
 	dc.b	.cmdEAvolumeSlide-.cmds		;EA
+	dc.b	.calcperiod-.cmds		;not used
+	dc.b	.calcperiod-.cmds		;not used
+	dc.b	.calcperiod-.cmds		;not used
+	dc.b	.calcperiod-.cmds		;not used
+	dc.b	.calcperiod-.cmds		;not used
 	EVEN
 
 .cmdEAvolumeSlide:
@@ -880,7 +949,7 @@ FC_PlayInfo_SEQptr		rs.l	1
 FC_PlayInfo_PATptr		rs.l	1
 FC_PlayInfo_FRQptr		rs.l	1
 FC_PlayInfo_VOLptr		rs.l	1
-
+	
 FC_PlayInfo:
 	dc.w 0		;Channels bitmask
 	dc.w 0		;Speed
@@ -890,7 +959,7 @@ FC_PlayInfo:
 	dc.l 0		;pat
 	dc.l 0		;frq
 	dc.l 0		;vol
-
+	
 ;;; Silent instrument definition
 FC_SILENT_VOLUME: 	dc.b 1,0,0,0,0,0
 FC_SILENT_FREQ: 	dc.b $e1
@@ -935,3 +1004,138 @@ FC_WaveformsInfo:
 	dc.w	0		; repeat length
 	blk.b	6,0		; not used
 	ENDR
+
+FC13_WaveformsInfo:	
+	dc.w $0000,$0000,$0010,$0000,$0010 
+	dc.w $0000,$0020,$0010,$0000,$0010 
+	dc.w $0000,$0040,$0010,$0000,$0010 
+	dc.w $0000,$0060,$0010,$0000,$0010 
+	dc.w $0000,$0080,$0010,$0000,$0010 
+	dc.w $0000,$00a0,$0010,$0000,$0010 
+	dc.w $0000,$00c0,$0010,$0000,$0010 
+	dc.w $0000,$00e0,$0010,$0000,$0010 
+	dc.w $0000,$0100,$0010,$0000,$0010 
+	dc.w $0000,$0120,$0010,$0000,$0010 
+	dc.w $0000,$0140,$0010,$0000,$0010 
+	dc.w $0000,$0160,$0010,$0000,$0010 
+	dc.w $0000,$0180,$0010,$0000,$0010 
+	dc.w $0000,$01a0,$0010,$0000,$0010 
+	dc.w $0000,$01c0,$0010,$0000,$0010 
+	dc.w $0000,$01e0,$0010,$0000,$0010 
+	dc.w $0000,$0200,$0010,$0000,$0010 
+	dc.w $0000,$0220,$0010,$0000,$0010 
+	dc.w $0000,$0240,$0010,$0000,$0010 
+	dc.w $0000,$0260,$0010,$0000,$0010 
+	dc.w $0000,$0280,$0010,$0000,$0010 
+	dc.w $0000,$02a0,$0010,$0000,$0010 
+	dc.w $0000,$02c0,$0010,$0000,$0010 
+	dc.w $0000,$02e0,$0010,$0000,$0010 
+	dc.w $0000,$0300,$0010,$0000,$0010 
+	dc.w $0000,$0320,$0010,$0000,$0010 
+	dc.w $0000,$0340,$0010,$0000,$0010 
+	dc.w $0000,$0360,$0010,$0000,$0010 
+	dc.w $0000,$0380,$0010,$0000,$0010 
+	dc.w $0000,$03a0,$0010,$0000,$0010 
+	dc.w $0000,$03c0,$0010,$0000,$0010 
+	dc.w $0000,$03e0,$0010,$0000,$0010 
+	dc.w $0000,$0400,$0008,$0000,$0008 
+	dc.w $0000,$0410,$0008,$0000,$0008 
+	dc.w $0000,$0420,$0008,$0000,$0008 
+	dc.w $0000,$0430,$0008,$0000,$0008 
+	dc.w $0000,$0440,$0008,$0000,$0008
+	dc.w $0000,$0450,$0008,$0000,$0008
+	dc.w $0000,$0460,$0008,$0000,$0008
+	dc.w $0000,$0470,$0008,$0000,$0008
+	dc.w $0000,$0480,$0010,$0000,$0010
+	dc.w $0000,$04a0,$0008,$0000,$0008
+	dc.w $0000,$04b0,$0010,$0000,$0010
+	dc.w $0000,$04d0,$0010,$0000,$0010
+	dc.w $0000,$04f0,$0008,$0000,$0008
+	dc.w $0000,$0500,$0008,$0000,$0008
+	dc.w $0000,$0510,$0018,$0000,$0018
+
+FC13_WAVEFORMS_DATA:
+	dc.w $c0c0,$d0d8,$e0e8,$f0f8,$00f8,$f0e8,$e0d8,$d0c8
+	dc.w $3f37,$2f27,$1f17,$0f07,$ff07,$0f17,$1f27,$2f37
+	dc.w $c0c0,$d0d8,$e0e8,$f0f8,$00f8,$f0e8,$e0d8,$d0c8
+	dc.w $c037,$2f27,$1f17,$0f07,$ff07,$0f17,$1f27,$2f37
+	dc.w $c0c0,$d0d8,$e0e8,$f0f8,$00f8,$f0e8,$e0d8,$d0c8
+	dc.w $c0b8,$2f27,$1f17,$0f07,$ff07,$0f17,$1f27,$2f37
+	dc.w $c0c0,$d0d8,$e0e8,$f0f8,$00f8,$f0e8,$e0d8,$d0c8
+	dc.w $c0b8,$b027,$1f17,$0f07,$ff07,$0f17,$1f27,$2f37
+	dc.w $c0c0,$d0d8,$e0e8,$f0f8,$00f8,$f0e8,$e0d8,$d0c8
+	dc.w $c0b8,$b0a8,$1f17,$0f07,$ff07,$0f17,$1f27,$2f37
+	dc.w $c0c0,$d0d8,$e0e8,$f0f8,$00f8,$f0e8,$e0d8,$d0c8
+	dc.w $c0b8,$b0a8,$a017,$0f07,$ff07,$0f17,$1f27,$2f37
+	dc.w $c0c0,$d0d8,$e0e8,$f0f8,$00f8,$f0e8,$e0d8,$d0c8
+	dc.w $c0b8,$b0a8,$a098,$0f07,$ff07,$0f17,$1f27,$2f37
+	dc.w $c0c0,$d0d8,$e0e8,$f0f8,$00f8,$f0e8,$e0d8,$d0c8
+	dc.w $c0b8,$b0a8,$a098,$9007,$ff07,$0f17,$1f27,$2f37
+	dc.w $c0c0,$d0d8,$e0e8,$f0f8,$00f8,$f0e8,$e0d8,$d0c8
+	dc.w $c0b8,$b0a8,$a098,$9088,$ff07,$0f17,$1f27,$2f37
+	dc.w $c0c0,$d0d8,$e0e8,$f0f8,$00f8,$f0e8,$e0d8,$d0c8
+	dc.w $c0b8,$b0a8,$a098,$9088,$8007,$0f17,$1f27,$2f37
+	dc.w $c0c0,$d0d8,$e0e8,$f0f8,$00f8,$f0e8,$e0d8,$d0c8
+	dc.w $c0b8,$b0a8,$a098,$9088,$8088,$0f17,$1f27,$2f37
+	dc.w $c0c0,$d0d8,$e0e8,$f0f8,$00f8,$f0e8,$e0d8,$d0c8
+	dc.w $c0b8,$b0a8,$a098,$9088,$8088,$9017,$1f27,$2f37
+	dc.w $c0c0,$d0d8,$e0e8,$f0f8,$00f8,$f0e8,$e0d8,$d0c8
+	dc.w $c0b8,$b0a8,$a098,$9088,$8088,$9098,$1f27,$2f37
+	dc.w $c0c0,$d0d8,$e0e8,$f0f8,$00f8,$f0e8,$e0d8,$d0c8
+	dc.w $c0b8,$b0a8,$a098,$9088,$8088,$9098,$a027,$2f37
+	dc.w $c0c0,$d0d8,$e0e8,$f0f8,$00f8,$f0e8,$e0d8,$d0c8
+	dc.w $c0b8,$b0a8,$a098,$9088,$8088,$9098,$a0a8,$2f37
+	dc.w $c0c0,$d0d8,$e0e8,$f0f8,$00f8,$f0e8,$e0d8,$d0c8
+	dc.w $c0b8,$b0a8,$a098,$9088,$8088,$9098,$a0a8,$b037
+	dc.w $8181,$8181,$8181,$8181,$8181,$8181,$8181,$8181
+	dc.w $7f7f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f
+	dc.w $8181,$8181,$8181,$8181,$8181,$8181,$8181,$8181
+	dc.w $817f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f
+	dc.w $8181,$8181,$8181,$8181,$8181,$8181,$8181,$8181
+	dc.w $8181,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f
+	dc.w $8181,$8181,$8181,$8181,$8181,$8181,$8181,$8181
+	dc.w $8181,$817f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f
+	dc.w $8181,$8181,$8181,$8181,$8181,$8181,$8181,$8181
+	dc.w $8181,$8181,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f
+	dc.w $8181,$8181,$8181,$8181,$8181,$8181,$8181,$8181
+	dc.w $8181,$8181,$817f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f
+	dc.w $8181,$8181,$8181,$8181,$8181,$8181,$8181,$8181
+	dc.w $8181,$8181,$8181,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f
+	dc.w $8181,$8181,$8181,$8181,$8181,$8181,$8181,$8181
+	dc.w $8181,$8181,$8181,$817f,$7f7f,$7f7f,$7f7f,$7f7f
+	dc.w $8181,$8181,$8181,$8181,$8181,$8181,$8181,$8181
+	dc.w $8181,$8181,$8181,$8181,$7f7f,$7f7f,$7f7f,$7f7f
+	dc.w $8181,$8181,$8181,$8181,$8181,$8181,$8181,$8181
+	dc.w $8181,$8181,$8181,$8181,$817f,$7f7f,$7f7f,$7f7f
+	dc.w $8181,$8181,$8181,$8181,$8181,$8181,$8181,$8181
+	dc.w $8181,$8181,$8181,$8181,$8181,$7f7f,$7f7f,$7f7f
+	dc.w $8181,$8181,$8181,$8181,$8181,$8181,$8181,$8181
+	dc.w $8181,$8181,$8181,$8181,$8181,$817f,$7f7f,$7f7f
+	dc.w $8181,$8181,$8181,$8181,$8181,$8181,$8181,$8181
+	dc.w $8181,$8181,$8181,$8181,$8181,$8181,$7f7f,$7f7f
+	dc.w $8181,$8181,$8181,$8181,$8181,$8181,$8181,$8181
+	dc.w $8181,$8181,$8181,$8181,$8181,$8181,$817f,$7f7f
+	dc.w $8080,$8080,$8080,$8080,$8080,$8080,$8080,$8080
+	dc.w $8080,$8080,$8080,$8080,$8080,$8080,$8080,$7f7f
+	dc.w $8080,$8080,$8080,$8080,$8080,$8080,$8080,$8080
+	dc.w $8080,$8080,$8080,$8080,$8080,$8080,$8080,$807f
+	dc.w $8080,$8080,$8080,$8080,$7f7f,$7f7f,$7f7f,$7f7f
+	dc.w $8080,$8080,$8080,$807f,$7f7f,$7f7f,$7f7f,$7f7f
+	dc.w $8080,$8080,$8080,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f
+	dc.w $8080,$8080,$807f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f
+	dc.w $8080,$8080,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f
+	dc.w $8080,$807f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f
+	dc.w $8080,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f
+	dc.w $8080,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f,$7f7f
+	dc.w $8080,$9098,$a0a8,$b0b8,$c0c8,$d0d8,$e0e8,$f0f8
+	dc.w $0008,$1018,$2028,$3038,$4048,$5058,$6068,$707f
+	dc.w $8080,$a0b0,$c0d0,$e0f0,$0010,$2030,$4050,$6070
+	dc.w $4545,$797d,$7a77,$7066,$6158,$534d,$2c20,$1812
+	dc.w $04db,$d3cd,$c6bc,$b5ae,$a8a3,$9d99,$938e,$8b8a
+	dc.w $4545,$797d,$7a77,$7066,$5b4b,$4337,$2c20,$1812
+	dc.w $04f8,$e8db,$cfc6,$beb0,$a8a4,$9e9a,$9594,$8d83
+	dc.w $0000,$4060,$7f60,$4020,$00e0,$c0a0,$80a0,$c0e0
+	dc.w $0000,$4060,$7f60,$4020,$00e0,$c0a0,$80a0,$c0e0
+	dc.w $8080,$9098,$a0a8,$b0b8,$c0c8,$d0d8,$e0e8,$f0f8
+	dc.w $0008,$1018,$2028,$3038,$4048,$5058,$6068,$707f
+	dc.w $8080,$a0b0,$c0d0,$e0f0,$0010,$2030,$4050,$6070	

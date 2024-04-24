@@ -137,6 +137,12 @@ Main:
         cmp.b   #D_MenuEntries-1,d0
         beq.s   .quit
 
+        lea     PlayerTimes(pc),a0
+        move.w  #99,PlayerTimeMin(a0)
+        move.w  #0,PlayerTimeMax(a0)
+        move.w  #0,PlayerTimeCurr(a0)
+        move.w  #0,PlayerTimeCurrDelay(a0)
+        
         jsr	END_MUSIC
         
         lea     MusicPtrs(pc),a0
@@ -869,12 +875,12 @@ MenuItem:       dc.b    0		; selected menu item number
 MenuPrevItem:   dc.b    -1              ; previously selected item number
                 
 MenuText:
-	dc.b	"MUSIC 1",0
-	dc.b	"MUSIC 2",0
-	dc.b	"MUSIC 3",0
-	dc.b	"MUSIC 4",0
-	dc.b	"MUSIC 5",0
-	dc.b	"MUSIC 6",0
+	dc.b	"CRACK DOWN BY RAF - SMOD",0
+	dc.b	"MUSIC 2 - FC14",0
+	dc.b	"MUSIC 3 - FC14",0
+	dc.b	"MUSIC 4 - FC14",0
+	dc.b	"MUSIC 5 - FC14",0
+	dc.b	"MUSIC 6 - FC14",0
 	dc.b	"EXIT DEMO",0
 	dc.b	0
 	EVEN
@@ -1057,7 +1063,7 @@ MusicPtrs:
         dc.l    Music6
         
 Music1:
-	incbin modules/complex.fc
+	incbin "modules/crack down.smod"
 Music2:
 	incbin modules/shaolin.fc
 Music3:
