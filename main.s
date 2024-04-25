@@ -1063,7 +1063,7 @@ MusicPtrs:
         dc.l    Music6
         
 Music1:
-	incbin "modules/crack down.smod"
+	incbin modules/ice2.fc
 Music2:
 	incbin modules/shaolin.fc
 Music3:
