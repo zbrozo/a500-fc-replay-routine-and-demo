@@ -22,24 +22,29 @@
 ;;	move.l $4,a6
 ;;	jmp -138(a6)
 
-SMOD			= 0		; for better SMOD compability
+;;; Compability modes
+FC_SMOD_ONLY		= 0		
+FC_14_ONLY		= 0
+FC_SMOD_AND_14		= 1
 
 FC_SAMPLES		= 10
 FC_WAVEFORMS		= 80
 FC13_WAVEFORMS		= 47
 FC_CHANNELS		= 4
 
+;;; Offsets in module
 FC_MOD_SEQ_SIZE		= 4		; size of sequence table
 FC_MOD_PAT		= 8		; long - offset to patterns
 FC_MOD_FRQ		= $10		; long - offset to freq table
 FC_MOD_VOL		= $18		; long - offset to volume table (instruments)
-FC_MOD_Samples			= $20		; long - offset to the first sample
+FC_MOD_Samples		= $20		; long - offset to the first sample
 FC_MOD_Waveforms	= $24		; long - offset to the first waveform
 FC_MOD_SamplesInfo	= $28		; data of 10 samples: length.w, repeat start.l
 FC_MOD_WaveformsInfo	= $64		; data of 80 waveforms: length.b
 FC_MOD_SEQ		= $B4		; sequence lines
 FC13_MOD_SEQ		= $64		; sequence lines in FC13
 
+;;; Offsets in voice data structure
 FC_VOICE_BeginOfSeq	= 0		; long
 FC_VOICE_PitchBendStep	= 4		; byte
 FC_VOICE_PitchBendSustainTime = 5	; byte
@@ -89,8 +94,15 @@ FC_PAT_END		= $49
 FC_PAT_SIZE		= 64
 
 FC_PERIOD_MAX		= $d60
+FC_SMOD_PERIOD_MAX	= $6b0
 FC_PERIOD_MIN		= $71
 
+FC_VERIFY_PERIOD_MAX: MACRO
+	cmpi.w	#\1,d0
+	bls.s	*+6
+	move.w	#\1,d0
+	ENDM
+	
 END_MUSIC:
 FC_END:
 	;; clear periods and volumes
@@ -110,11 +122,26 @@ FC_INIT:
 
 	lea	FC_PlayInfo(pc),a5
 
-	move.l	(a0),d0
-	cmp.l	#'FC14',d0
-	bne.s	FC13_INIT
+	bsr.s	FC_InitDetectVersion
 
+	IFNE	FC_SMOD_ONLY
+	lea	FC13_MOD_SEQ(a0),a1
+	ENDC
+
+	IFNE	FC_14_ONLY
 	lea	FC_MOD_SEQ(a0),a1
+	ENDC
+
+	IFNE	FC_SMOD_AND_14
+	tst.w	FC_PlayInfo_Version(a5)
+	bne.s	.FC14_InitSeq
+	lea	FC13_MOD_SEQ(a0),a1
+	bra.s	.InitSeqOk
+.FC14_InitSeq:
+	lea	FC_MOD_SEQ(a0),a1
+.InitSeqOk:
+	ENDC
+	
 	move.l	a1,FC_PlayInfo_SEQptr(a5)
 
 	move.l	a0,a1
@@ -134,8 +161,25 @@ FC_INIT:
 	mulu	#13,d0
 
 	bsr.s	FC_InitSamples
-	bsr	FC_InitWaveforms
 
+	IFNE	FC_SMOD_ONLY
+	bsr	FC13_InitWaveforms
+	ENDC
+	
+	IFNE	FC_14_ONLY
+	bsr.s	FC_InitWaveforms
+	ENDC
+
+	IFNE	FC_SMOD_AND_14
+	tst.w	FC_PlayInfo_Version(a5)
+	bne.s	.FC14_InitWaveforms
+	bsr	FC13_InitWaveforms
+	bra	.InitWaveformsOk
+.FC14_InitWaveforms:
+	bsr.s	FC_InitWaveforms
+.InitWaveformsOk:
+	ENDC
+	
 	move.l	FC_PlayInfo_SEQptr(a5),a0
 	bsr	FC_InitSpeed
 
@@ -146,37 +190,14 @@ FC_INIT:
 
 	rts
 
-FC13_INIT:
-
-	lea	FC13_MOD_SEQ(a0),a1
-	move.l	a1,FC_PlayInfo_SEQptr(a5)
-
-	move.l	a0,a1
-	add.l	FC_MOD_PAT(a0),a1
-	move.l	a1,FC_PlayInfo_PATptr(a5)
-
-	move.l	a0,a1
-	add.l	FC_MOD_FRQ(a0),a1
-	move.l	a1,FC_PlayInfo_FRQptr(a5)
-
-	move.l	a0,a1
-	add.l	FC_MOD_VOL(a0),a1
-	move.l	a1,FC_PlayInfo_VOLptr(a5)
-
-	move.l	FC_MOD_SEQ_SIZE(a0),d0
-	divu	#13,d0
-	mulu	#13,d0
-
-	bsr.s	FC_InitSamples
-	bsr.s	FC13_InitWaveforms
-
-	move.l	FC_PlayInfo_SEQptr(a5),a0
-	bsr	FC_InitSpeed
-
-	lea	FC_VoicesInfo(pc),a0
-	move.l	FC_PlayInfo_PATptr(a5),a1
-	move.l	FC_PlayInfo_SEQptr(a5),a2
-	bsr	FC_InitVoices
+FC_InitDetectVersion:	
+	move.l	(a0),d0
+	cmp.l	#'FC14',d0
+	bne.s	.smod
+	move.w	#1,FC_PlayInfo_Version(a5)
+	rts				
+.smod:
+	move.w	#0,FC_PlayInfo_Version(a5)
 	rts
 
 FC_InitSamples:
@@ -590,14 +611,21 @@ FC_Effects:
 	dc.w	.cmdE7jmp-.cmds		;E7
 	dc.w	.cmdE8newsustain-.cmds	;E8
 
-	IFNE	SMOD
+	IFNE	FC_SMOD_ONLY
 	dc.w	FC_VOLUfx-.cmds
 	dc.w	FC_VOLUfx-.cmds
-	ELSE
+	ENDC
+	
+	IFNE	FC_14_ONLY
 	dc.w	.cmdE9newsample-.cmds	;E9
 	dc.w	.cmdEApitchbend-.cmds	;EA
 	ENDC
 
+	IFNE	FC_SMOD_AND_14
+	dc.w	.cmdE9newsample-.cmds	;E9
+	dc.w	.cmdEApitchbend-.cmds	;EA
+	ENDC
+	
 	dc.w	FC_VOLUfx-.cmds
 	dc.w	FC_VOLUfx-.cmds
 	dc.w	FC_VOLUfx-.cmds
@@ -737,11 +765,16 @@ FC_VOLUfx:
 	bra	.calcperiod
 .volsustzero:
 
-	IFEQ	SMOD
+	IFNE	FC_14_ONLY
 	tst.b	FC_VOICE_VolumeTime(a0)
 	bne.s	.do_VOLbend
 	ENDC
 
+	IFNE	FC_SMOD_AND_14
+	tst.b	FC_VOICE_VolumeTime(a0)
+	bne.s	.do_VOLbend
+	ENDC
+	
 	subq.b	#1,FC_VOICE_VolumeSpeedTmp(a0)
 	bne	.calcperiod
 	move.b	FC_VOICE_VolumeSpeed(a0),FC_VOICE_VolumeSpeedTmp(a0)
@@ -774,12 +807,18 @@ FC_VOLUfx:
 	dc.b	.cmdE8volumeSustain-.cmds	;E8
 	dc.b	.calcperiod-.cmds		;not used
 
-	IFNE	SMOD
+	IFNE	FC_SMOD_ONLY
 	dc.w	FC_VOLUfx-.cmds
-	ELSE
+	ENDC
+
+	IFNE	FC_14_ONLY
 	dc.b	.cmdEAvolumeSlide-.cmds		;EA
 	ENDC
 
+	IFNE	FC_SMOD_AND_14
+	dc.b	.cmdEAvolumeSlide-.cmds		;EA
+	ENDC
+	
 	dc.b	.calcperiod-.cmds		;not used
 	dc.b	.calcperiod-.cmds		;not used
 	dc.b	.calcperiod-.cmds		;not used
@@ -894,17 +933,24 @@ FC_VOLUfx:
 	add.w	d1,d0
 .noVibrato:
 
-.tomek:
 ;;; ----------------------------------
 ;;; PORTAMENTO
 ;;; in: d0 - period
 ;;; ----------------------------------
 
-	IFEQ	SMOD
+	IFEQ	FC_14_ONLY
 	not.b	FC_VOICE_PortamentoDelay(a0)
 	beq.s	.addPortamento
 	ENDC
 
+	IFEQ	FC_SMOD_AND_14
+	tst.w	FC_PlayInfo_Version(a5)
+	beq.s	.SMOD_PortamentoNoDelay
+	not.b	FC_VOICE_PortamentoDelay(a0)
+	beq.s	.addPortamento
+.SMOD_PortamentoNoDelay:
+	ENDC
+	
 	moveq	#0,d1
 	move.b	FC_VOICE_PortamentoInfo(a0),d1	;get portavalue
 	beq.s	.pitchbend		;0=no portamento
@@ -938,26 +984,28 @@ FC_VOLUfx:
 ;;; ----------------------------------
 ;;; Keep period in range
 ;;; ----------------------------------
+	
+	cmpi.w	#FC_PERIOD_MIN-1,d0
+	bhi.s	*+6
+	move.w	#FC_PERIOD_MIN,d0
 
-	cmpi.w	#$0070,d0
-	bhi.s	.nn1
-	move.w	#$0071,d0
-.nn1:
-
-	IFNE	SMOD
-	cmpi.w	#$06b0,d0
-	bls.s	.nn2
-	move.w	#$06b0,d0
-.nn2:
-
-	ELSE
-
-	cmpi.w	#$0d60,d0
-	bls.s	.nn2
-	move.w	#$0d60,d0
-.nn2:
+	IFNE	FC_SMOD_ONLY
+	FC_VERIFY_PERIOD_MAX FC_SMOD_PERIOD_MAX
+	ENDC
+	
+	IFNE 	FC_14_ONLY
+	FC_VERIFY_PERIOD_MAX FC_PERIOD_MAX
 	ENDC
 
+	IFNE 	FC_SMOD_AND_14
+	tst.w	FC_PlayInfo_Version(a5)
+	bne.s	.FC14_VerifyPeriodMax
+	FC_VERIFY_PERIOD_MAX FC_SMOD_PERIOD_MAX
+	bra.s	.VerifyPeriodMaxOk
+.FC14_VerifyPeriodMax:
+	FC_VERIFY_PERIOD_MAX FC_PERIOD_MAX
+.VerifyPeriodMaxOk:
+	ENDC
 ;;; ----------------------------------
 ;;; Prepare result (period and volume)
 ;;; ----------------------------------
@@ -981,6 +1029,7 @@ FC_PlayInfo_SEQptr		rs.l	1
 FC_PlayInfo_PATptr		rs.l	1
 FC_PlayInfo_FRQptr		rs.l	1
 FC_PlayInfo_VOLptr		rs.l	1
+FC_PlayInfo_Version		rs.w	0 ; 0 - SMOD, 1 - FC1.4
 
 FC_PlayInfo:
 	dc.w 0		;Channels bitmask
@@ -991,7 +1040,8 @@ FC_PlayInfo:
 	dc.l 0		;pat
 	dc.l 0		;frq
 	dc.l 0		;vol
-
+	dc.w 0		;version
+	
 ;;; Silent instrument definition
 FC_SILENT_VOLUME:	dc.b 1,0,0,0,0,0
 FC_SILENT_FREQ:		dc.b $e1
