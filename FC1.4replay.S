@@ -149,13 +149,13 @@ FC_INIT:
 
 	bsr.s	FC_DetectVersion
 
-	IF	FC_MODE=1
+	IFEQ	FC_MODE-1
 	lea	FC_SMOD_MOD_SEQ(a0),a1
 	ENDC
-	IF	FC_MODE=2
+	IFEQ	FC_MODE-2
 	lea	FC_MOD_SEQ(a0),a1
 	ENDC
-	IF	FC_MODE=0
+	IFEQ	FC_MODE
 	tst.w	FC_PlayInfo_Version(a5)
 	beq.s	.FC_SMOD_InitSeq
 	lea	FC_MOD_SEQ(a0),a1
