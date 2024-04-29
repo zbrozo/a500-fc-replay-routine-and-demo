@@ -186,7 +186,7 @@ FC_INIT:
 	bsr.s	FC_InitSamples
 
 	IFEQ	FC_MODE-1
-	bsr	FC_SMOD_InitWaveforms
+	bsr.s	FC_SMOD_InitWaveforms
 	ENDC
 	IFEQ	FC_MODE-2
 	bsr.s	FC_InitWaveforms
@@ -615,7 +615,7 @@ FC_Effects:
 	dc.w	FC_VOLUfx-.cmds
 	dc.w	FC_VOLUfx-.cmds
 	ENDC
-	IF	FC_MODE-2
+	IFEQ	FC_MODE-2
 	dc.w	.cmdE9newsample-.cmds	;E9
 	dc.w	.cmdEApitchbend-.cmds	;EA
 	ENDC
@@ -943,10 +943,10 @@ FC_VOLUfx:
 
 	IFEQ	FC_MODE
 	tst.w	FC_PlayInfo_Version(a5)
-	beq.s	.FC_SMOD_PortamentoNoDelay
+	beq.s	.FC_SMOD_SkipPortamentoNoDelay
 	not.b	FC_VOICE_PortamentoDelay(a0)
 	beq.s	.addPortamento
-.FC_SMOD_PortamentoNoDelay:
+.FC_SMOD_SkipPortamentoNoDelay:
 	ENDC
 	
 	moveq	#0,d1
