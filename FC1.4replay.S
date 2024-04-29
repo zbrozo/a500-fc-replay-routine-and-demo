@@ -23,13 +23,11 @@
 ;;	jmp -138(a6)
 
 ;;; Compability modes
-FC_SMOD_ONLY		= 0		
-FC_14_ONLY		= 0
-FC_SMOD_AND_14		= 1
+FC_MODE			= 0	; 0 - both, 1 - smod, 2 - fc1.4
 
 FC_SAMPLES		= 10
 FC_WAVEFORMS		= 80
-FC13_WAVEFORMS		= 47
+FC_SMOD_WAVEFORMS	= 47
 FC_CHANNELS		= 4
 
 ;;; Offsets in module
@@ -42,7 +40,7 @@ FC_MOD_Waveforms	= $24		; long - offset to the first waveform
 FC_MOD_SamplesInfo	= $28		; data of 10 samples: length.w, repeat start.l
 FC_MOD_WaveformsInfo	= $64		; data of 80 waveforms: length.b
 FC_MOD_SEQ		= $B4		; sequence lines
-FC13_MOD_SEQ		= $64		; sequence lines in FC13
+FC_SMOD_MOD_SEQ		= $64		; sequence lines in SMOD format
 
 ;;; Offsets in voice data structure
 FC_VOICE_BeginOfSeq	= 0		; long
@@ -97,6 +95,12 @@ FC_PERIOD_MAX		= $d60
 FC_SMOD_PERIOD_MAX	= $6b0
 FC_PERIOD_MIN		= $71
 
+FC_VERIFY_PERIOD_MIN: MACRO
+	cmpi.w	#\1-1,d0
+	bhi.s	*+6
+	move.w	#\1,d0
+	ENDM
+	
 FC_VERIFY_PERIOD_MAX: MACRO
 	cmpi.w	#\1,d0
 	bls.s	*+6
@@ -115,6 +119,27 @@ FC_END:
 	bclr	#1,$bfe001
 	rts
 
+FC_DetectVersion:	
+	move.l	(a0),d0
+	cmp.l	#'FC14',d0
+	bne.s	.smod
+	move.w	#1,FC_PlayInfo_Version(a5)
+	rts				
+.smod:
+	move.w	#0,FC_PlayInfo_Version(a5)
+	rts
+
+;;; in: a0 - seq ptr
+FC_InitSpeed:
+	moveq	#0,d2
+	move.b	FC_SEQ_SPEED(a0),d2	;Get replay speed
+	bne.s	.ok
+	move.b	#3,d2			;Set default speed
+.ok:
+	move.w	d2,FC_PlayInfo_ReplaySpeedCounter(a5)
+	move.w	d2,FC_PlayInfo_ReplaySpeed(a5)
+	rts
+	
 ;;; in: a0 - module
 INIT_MUSIC:
 FC_INIT:
@@ -122,23 +147,21 @@ FC_INIT:
 
 	lea	FC_PlayInfo(pc),a5
 
-	bsr.s	FC_InitDetectVersion
+	bsr.s	FC_DetectVersion
 
-	IFNE	FC_SMOD_ONLY
-	lea	FC13_MOD_SEQ(a0),a1
+	IF	FC_MODE=1
+	lea	FC_SMOD_MOD_SEQ(a0),a1
 	ENDC
-
-	IFNE	FC_14_ONLY
+	IF	FC_MODE=2
 	lea	FC_MOD_SEQ(a0),a1
 	ENDC
-
-	IFNE	FC_SMOD_AND_14
+	IF	FC_MODE=0
 	tst.w	FC_PlayInfo_Version(a5)
-	bne.s	.FC14_InitSeq
-	lea	FC13_MOD_SEQ(a0),a1
-	bra.s	.InitSeqOk
-.FC14_InitSeq:
+	beq.s	.FC_SMOD_InitSeq
 	lea	FC_MOD_SEQ(a0),a1
+	bra.s	.InitSeqOk
+.FC_SMOD_InitSeq:
+	lea	FC_SMOD_MOD_SEQ(a0),a1
 .InitSeqOk:
 	ENDC
 	
@@ -162,42 +185,29 @@ FC_INIT:
 
 	bsr.s	FC_InitSamples
 
-	IFNE	FC_SMOD_ONLY
-	bsr	FC13_InitWaveforms
+	IFEQ	FC_MODE-1
+	bsr	FC_SMOD_InitWaveforms
 	ENDC
-	
-	IFNE	FC_14_ONLY
+	IFEQ	FC_MODE-2
 	bsr.s	FC_InitWaveforms
 	ENDC
-
-	IFNE	FC_SMOD_AND_14
+	IFEQ	FC_MODE
 	tst.w	FC_PlayInfo_Version(a5)
-	bne.s	.FC14_InitWaveforms
-	bsr	FC13_InitWaveforms
-	bra	.InitWaveformsOk
-.FC14_InitWaveforms:
+	beq.s	.FC_SMOD_InitWaveforms
 	bsr.s	FC_InitWaveforms
+	bra	.InitWaveformsOk
+.FC_SMOD_InitWaveforms:
+	bsr.s	FC_SMOD_InitWaveforms
 .InitWaveformsOk:
 	ENDC
 	
 	move.l	FC_PlayInfo_SEQptr(a5),a0
-	bsr	FC_InitSpeed
+	bsr.s	FC_InitSpeed
 
 	lea	FC_VoicesInfo(pc),a0
 	move.l	FC_PlayInfo_PATptr(a5),a1
 	move.l	FC_PlayInfo_SEQptr(a5),a2
 	bsr	FC_InitVoices
-
-	rts
-
-FC_InitDetectVersion:	
-	move.l	(a0),d0
-	cmp.l	#'FC14',d0
-	bne.s	.smod
-	move.w	#1,FC_PlayInfo_Version(a5)
-	rts				
-.smod:
-	move.w	#0,FC_PlayInfo_Version(a5)
 	rts
 
 FC_InitSamples:
@@ -248,12 +258,12 @@ FC_InitWaveforms:
 	dbf	d1,.loop
 	rts
 
-FC13_InitWaveforms:
-	lea	FC13_WaveformsInfo(pc),a1
+FC_SMOD_InitWaveforms:
+	lea	FC_SMOD_WaveformsInfo(pc),a1
 	lea	FC_WaveformsInfo(pc),a2
-	lea	FC13_WAVEFORMS_DATA(pc),a3
+	lea	FC_SMOD_WaveformsData(pc),a3
 
-	moveq	#FC13_WAVEFORMS-1,d1
+	moveq	#FC_SMOD_WAVEFORMS-1,d1
 .loop:
 	move.l	a3,d2
 	add.l	(a1)+,d2
@@ -263,17 +273,6 @@ FC13_InitWaveforms:
 	move.w	(a1)+,(a2)+	; repeat length
 	addq.w	#6,a2		; next waveform info
 	dbf	d1,.loop
-	rts
-
-;;; in: a0 - seq ptr
-FC_InitSpeed:
-	moveq	#0,d2
-	move.b	FC_SEQ_SPEED(a0),d2	;Get replay speed
-	bne.s	.ok
-	move.b	#3,d2			;Set default speed
-.ok:
-	move.w	d2,FC_PlayInfo_ReplaySpeedCounter(a5)
-	move.w	d2,FC_PlayInfo_ReplaySpeed(a5)
 	rts
 
 FC_InitVoices:
@@ -352,6 +351,7 @@ FC_InitVoice:
 	adda.w	d1,a3
 	move.l	a3,FC_VOICE_PatternPtr(a0)
 	rts
+	
 ;;; ----------------------------------
 ;;; ----------------------------------
 ;;; ----------------------------------
@@ -611,17 +611,15 @@ FC_Effects:
 	dc.w	.cmdE7jmp-.cmds		;E7
 	dc.w	.cmdE8newsustain-.cmds	;E8
 
-	IFNE	FC_SMOD_ONLY
+	IFEQ	FC_MODE-1
 	dc.w	FC_VOLUfx-.cmds
 	dc.w	FC_VOLUfx-.cmds
 	ENDC
-	
-	IFNE	FC_14_ONLY
+	IF	FC_MODE-2
 	dc.w	.cmdE9newsample-.cmds	;E9
 	dc.w	.cmdEApitchbend-.cmds	;EA
 	ENDC
-
-	IFNE	FC_SMOD_AND_14
+	IFEQ	FC_MODE
 	dc.w	.cmdE9newsample-.cmds	;E9
 	dc.w	.cmdEApitchbend-.cmds	;EA
 	ENDC
@@ -765,14 +763,16 @@ FC_VOLUfx:
 	bra	.calcperiod
 .volsustzero:
 
-	IFNE	FC_14_ONLY
+	IFEQ	FC_MODE-2
 	tst.b	FC_VOICE_VolumeTime(a0)
 	bne.s	.do_VOLbend
 	ENDC
-
-	IFNE	FC_SMOD_AND_14
+	IFEQ	FC_MODE
+	tst.w	FC_PlayInfo_Version(a5)
+	beq.s	.FC_SMOD_SkipVolumeTimeCheck
 	tst.b	FC_VOICE_VolumeTime(a0)
 	bne.s	.do_VOLbend
+.FC_SMOD_SkipVolumeTimeCheck:	
 	ENDC
 	
 	subq.b	#1,FC_VOICE_VolumeSpeedTmp(a0)
@@ -807,15 +807,13 @@ FC_VOLUfx:
 	dc.b	.cmdE8volumeSustain-.cmds	;E8
 	dc.b	.calcperiod-.cmds		;not used
 
-	IFNE	FC_SMOD_ONLY
+	IFEQ	FC_MODE-1
 	dc.w	FC_VOLUfx-.cmds
 	ENDC
-
-	IFNE	FC_14_ONLY
+	IFEQ	FC_MODE-2
 	dc.b	.cmdEAvolumeSlide-.cmds		;EA
 	ENDC
-
-	IFNE	FC_SMOD_AND_14
+	IFEQ	FC_MODE
 	dc.b	.cmdEAvolumeSlide-.cmds		;EA
 	ENDC
 	
@@ -938,17 +936,17 @@ FC_VOLUfx:
 ;;; in: d0 - period
 ;;; ----------------------------------
 
-	IFEQ	FC_14_ONLY
+	IFEQ	FC_MODE-2
 	not.b	FC_VOICE_PortamentoDelay(a0)
 	beq.s	.addPortamento
 	ENDC
 
-	IFEQ	FC_SMOD_AND_14
+	IFEQ	FC_MODE
 	tst.w	FC_PlayInfo_Version(a5)
-	beq.s	.SMOD_PortamentoNoDelay
+	beq.s	.FC_SMOD_PortamentoNoDelay
 	not.b	FC_VOICE_PortamentoDelay(a0)
 	beq.s	.addPortamento
-.SMOD_PortamentoNoDelay:
+.FC_SMOD_PortamentoNoDelay:
 	ENDC
 	
 	moveq	#0,d1
@@ -984,26 +982,22 @@ FC_VOLUfx:
 ;;; ----------------------------------
 ;;; Keep period in range
 ;;; ----------------------------------
-	
-	cmpi.w	#FC_PERIOD_MIN-1,d0
-	bhi.s	*+6
-	move.w	#FC_PERIOD_MIN,d0
 
-	IFNE	FC_SMOD_ONLY
+	FC_VERIFY_PERIOD_MIN FC_PERIOD_MIN
+
+	IFEQ 	FC_MODE-1
 	FC_VERIFY_PERIOD_MAX FC_SMOD_PERIOD_MAX
 	ENDC
-	
-	IFNE 	FC_14_ONLY
+	IFEQ 	FC_MODE-2
 	FC_VERIFY_PERIOD_MAX FC_PERIOD_MAX
 	ENDC
-
-	IFNE 	FC_SMOD_AND_14
+	IFEQ 	FC_MODE
 	tst.w	FC_PlayInfo_Version(a5)
-	bne.s	.FC14_VerifyPeriodMax
-	FC_VERIFY_PERIOD_MAX FC_SMOD_PERIOD_MAX
-	bra.s	.VerifyPeriodMaxOk
-.FC14_VerifyPeriodMax:
+	beq.s	.FC_SMOD_VerifyPeriodMax
 	FC_VERIFY_PERIOD_MAX FC_PERIOD_MAX
+	bra.s	.VerifyPeriodMaxOk
+.FC_SMOD_VerifyPeriodMax:
+	FC_VERIFY_PERIOD_MAX FC_SMOD_PERIOD_MAX
 .VerifyPeriodMaxOk:
 	ENDC
 ;;; ----------------------------------
@@ -1087,7 +1081,7 @@ FC_WaveformsInfo:
 	blk.b	6,0		; not used
 	ENDR
 
-FC13_WaveformsInfo:
+FC_SMOD_WaveformsInfo:
 	dc.w $0000,$0000,$0010,$0000,$0010
 	dc.w $0000,$0020,$0010,$0000,$0010
 	dc.w $0000,$0040,$0010,$0000,$0010
@@ -1136,7 +1130,7 @@ FC13_WaveformsInfo:
 	dc.w $0000,$0500,$0008,$0000,$0008
 	dc.w $0000,$0510,$0018,$0000,$0018
 
-FC13_WAVEFORMS_DATA:
+FC_SMOD_WaveformsData:
 	dc.w $c0c0,$d0d8,$e0e8,$f0f8,$00f8,$f0e8,$e0d8,$d0c8
 	dc.w $3f37,$2f27,$1f17,$0f07,$ff07,$0f17,$1f27,$2f37
 	dc.w $c0c0,$d0d8,$e0e8,$f0f8,$00f8,$f0e8,$e0d8,$d0c8
