@@ -100,13 +100,13 @@ FC_VERIFY_PERIOD_MIN: MACRO
 	bhi.s	*+6
 	move.w	#\1,d0
 	ENDM
-	
+
 FC_VERIFY_PERIOD_MAX: MACRO
 	cmpi.w	#\1,d0
 	bls.s	*+6
 	move.w	#\1,d0
 	ENDM
-	
+
 END_MUSIC:
 FC_END:
 	;; clear periods and volumes
@@ -119,12 +119,12 @@ FC_END:
 	bclr	#1,$bfe001
 	rts
 
-FC_DetectVersion:	
+FC_DetectVersion:
 	move.l	(a0),d0
 	cmp.l	#'FC14',d0
 	bne.s	.smod
 	move.w	#1,FC_PlayInfo_Version(a5)
-	rts				
+	rts
 .smod:
 	move.w	#0,FC_PlayInfo_Version(a5)
 	rts
@@ -139,7 +139,7 @@ FC_InitSpeed:
 	move.w	d2,FC_PlayInfo_ReplaySpeedCounter(a5)
 	move.w	d2,FC_PlayInfo_ReplaySpeed(a5)
 	rts
-	
+
 ;;; in: a0 - module
 INIT_MUSIC:
 FC_INIT:
@@ -164,7 +164,7 @@ FC_INIT:
 	lea	FC_SMOD_MOD_SEQ(a0),a1
 .InitSeqOk:
 	ENDC
-	
+
 	move.l	a1,FC_PlayInfo_SEQptr(a5)
 
 	move.l	a0,a1
@@ -200,7 +200,7 @@ FC_INIT:
 	bsr.s	FC_SMOD_InitWaveforms
 .InitWaveformsOk:
 	ENDC
-	
+
 	move.l	FC_PlayInfo_SEQptr(a5),a0
 	bsr.s	FC_InitSpeed
 
@@ -351,7 +351,7 @@ FC_InitVoice:
 	adda.w	d1,a3
 	move.l	a3,FC_VOICE_PatternPtr(a0)
 	rts
-	
+
 ;;; ----------------------------------
 ;;; ----------------------------------
 ;;; ----------------------------------
@@ -417,47 +417,37 @@ FC_PLAY:
 	move.w	d7,DMACON(a6)		; Enable audio DMA
 
 	;; Set repeat start and length of the sample in the channel
-	move.w	#2,d0
-	moveq	#0,d5
 .chan1:
 	lea	(FC_VoicesInfo+FC_VOICE_RepeatStartAndLengthDelay)(pc),a0
 
-	move.w	(a0),d7
+	tst.w	(a0)
 	beq.s	.chan2
 	subq.w	#1,(a0)
-	cmp.w	d0,d7
 	bne.s	.chan2
-	move.w	d5,(a0)
 	move.l	a1,AUD0LC(a6)		;Set samplestart
 	move.w	d1,AUD0LEN(a6)		;Set samplelength
 .chan2:
 	lea	FC_VOICE_SIZE(a0),a0
-	move.w	(a0),d7
+	tst.w	(a0)
 	beq.s	.chan3
 	subq.w	#1,(a0)
-	cmp.w	d0,d7
 	bne.s	.chan3
-	move.w	d5,(a0)
 	move.l	a2,AUD1LC(a6)
 	move.w	d2,AUD1LEN(a6)
 .chan3:
 	lea	FC_VOICE_SIZE(a0),a0
-	move.w	(a0),d7
+	tst.w	(a0)
 	beq.s	.chan4
 	subq.w	#1,(a0)
-	cmp.w	d0,d7
 	bne.s	.chan4
-	move.w	d5,(a0)
 	move.l	a3,AUD2LC(a6)
 	move.w	d3,AUD2LEN(a6)
 .chan4:
 	lea	FC_VOICE_SIZE(a0),a0
-	move.w	(a0),d7
+	tst.w	(a0)
 	beq.s	.endplay
 	subq.w	#1,(a0)
-	cmp.w	d0,d7
 	bne.s	.endplay
-	move.w	d5,(a0)
 	move.l	a4,AUD3LC(a6)
 	move.w	d4,AUD3LEN(a6)
 .endplay:
@@ -623,7 +613,7 @@ FC_Effects:
 	dc.w	.cmdE9newsample-.cmds	;E9
 	dc.w	.cmdEApitchbend-.cmds	;EA
 	ENDC
-	
+
 	dc.w	FC_VOLUfx-.cmds
 	dc.w	FC_VOLUfx-.cmds
 	dc.w	FC_VOLUfx-.cmds
@@ -661,7 +651,7 @@ FC_Effects:
 	move.l	d1,FC_VOICE_SamplePtr(a0)
 	move.w	(a4)+,4(a3)			; sample length
 	move.l	(a4),FC_VOICE_RepeatStart(a0)	; save repeat start and length
-	move.w	#3,FC_VOICE_RepeatStartAndLengthDelay(a0)
+	move.w	#2,FC_VOICE_RepeatStartAndLengthDelay(a0)
 	move.w	d7,FC_VOICE_VolumePos(a0)
 	move.b	#1,FC_VOICE_VolumeSpeedTmp(a0)
 	addq.w	#2,FC_VOICE_FreqPos(a0)
@@ -680,7 +670,7 @@ FC_Effects:
 	move.l	d1,FC_VOICE_SamplePtr(a0)
 	move.w	(a4)+,4(a3)			; sample length
 	move.l	(a4),FC_VOICE_RepeatStart(a0)	; save repeat start and length
-	move.w	#3,FC_VOICE_RepeatStartAndLengthDelay(a0)
+	move.w	#2,FC_VOICE_RepeatStartAndLengthDelay(a0)
 	addq.w	#2,FC_VOICE_FreqPos(a0)
 	bra	.transpose
 .cmdE9newsample:
@@ -714,7 +704,7 @@ FC_Effects:
 	move.l	6(a2),FC_VOICE_RepeatStart(a0)
 	move.w	d7,FC_VOICE_VolumePos(a0)
 	move.b	#1,FC_VOICE_VolumeSpeedTmp(a0)
-	move.w	#3,FC_VOICE_RepeatStartAndLengthDelay(a0)
+	move.w	#2,FC_VOICE_RepeatStartAndLengthDelay(a0)
 
 .nossmp:
 	addq.w	#3,FC_VOICE_FreqPos(a0)
@@ -772,9 +762,9 @@ FC_VOLUfx:
 	beq.s	.FC_SMOD_SkipVolumeTimeCheck
 	tst.b	FC_VOICE_VolumeTime(a0)
 	bne.s	.do_VOLbend
-.FC_SMOD_SkipVolumeTimeCheck:	
+.FC_SMOD_SkipVolumeTimeCheck:
 	ENDC
-	
+
 	subq.b	#1,FC_VOICE_VolumeSpeedTmp(a0)
 	bne	.calcperiod
 	move.b	FC_VOICE_VolumeSpeed(a0),FC_VOICE_VolumeSpeedTmp(a0)
@@ -816,7 +806,7 @@ FC_VOLUfx:
 	IFEQ	FC_MODE
 	dc.b	.cmdEAvolumeSlide-.cmds		;EA
 	ENDC
-	
+
 	dc.b	.calcperiod-.cmds		;not used
 	dc.b	.calcperiod-.cmds		;not used
 	dc.b	.calcperiod-.cmds		;not used
@@ -948,7 +938,7 @@ FC_VOLUfx:
 	beq.s	.addPortamento
 .FC_SMOD_SkipPortamentoNoDelay:
 	ENDC
-	
+
 	moveq	#0,d1
 	move.b	FC_VOICE_PortamentoInfo(a0),d1	;get portavalue
 	beq.s	.pitchbend		;0=no portamento
@@ -1035,7 +1025,7 @@ FC_PlayInfo:
 	dc.l 0		;frq
 	dc.l 0		;vol
 	dc.w 0		;version
-	
+
 ;;; Silent instrument definition
 FC_SILENT_VOLUME:	dc.b 1,0,0,0,0,0
 FC_SILENT_FREQ:		dc.b $e1
