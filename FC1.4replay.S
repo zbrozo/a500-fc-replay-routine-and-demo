@@ -397,60 +397,40 @@ FC_PLAY:
 	bsr	FC_Effects
 	move.l	d0,AUD3PER(a6)
 
-	lea	FC_VoicesInfo(pc),a0
-	move.l	FC_VOICE_SamplePtr+(0*FC_VOICE_SIZE)(a0),a1		;Get samplepointer
-	adda.w	FC_VOICE_RepeatStart+(0*FC_VOICE_SIZE)(a0),a1		;add repeat_start
-	move.l	FC_VOICE_SamplePtr+(1*FC_VOICE_SIZE)(a0),a2
-	adda.w	FC_VOICE_RepeatStart+(1*FC_VOICE_SIZE)(a0),a2
-	move.l	FC_VOICE_SamplePtr+(2*FC_VOICE_SIZE)(a0),a3
-	adda.w	FC_VOICE_RepeatStart+(2*FC_VOICE_SIZE)(a0),a3
-	move.l	FC_VOICE_SamplePtr+(3*FC_VOICE_SIZE)(a0),a4
-	adda.w	FC_VOICE_RepeatStart+(3*FC_VOICE_SIZE)(a0),a4
-	move.w	FC_VOICE_RepeatLength+(0*FC_VOICE_SIZE)(a0),d1		;Get repeat_length
-	move.w	FC_VOICE_RepeatLength+(1*FC_VOICE_SIZE)(a0),d2
-	move.w	FC_VOICE_RepeatLength+(2*FC_VOICE_SIZE)(a0),d3
-	move.w	FC_VOICE_RepeatLength+(3*FC_VOICE_SIZE)(a0),d4
-
-	;; Turn on channels
 	move.w	FC_PlayInfo_ChannelBitMask(a5),d7	; Bitmask
 	ori.w	#$8000,d7		; Set/clr bit = 1
 	move.w	d7,DMACON(a6)		; Enable audio DMA
-
+	
 	;; Set repeat start and length of the sample in the channel
-.chan1:
-	lea	(FC_VoicesInfo+FC_VOICE_RepeatStartAndLengthDelay)(pc),a0
 
+	lea	FC_VoicesInfo(pc),a2
+
+.voice	set 	0
+.audio	set	0
+	
+	REPT	FC_CHANNELS
+
+	lea	(FC_VoicesInfo+FC_VOICE_RepeatStartAndLengthDelay+.voice)(pc),a0
+        
 	tst.w	(a0)
-	beq.s	.chan2
+	beq.s	*+26
+
 	subq.w	#1,(a0)
-	bne.s	.chan2
-	move.l	a1,AUD0LC(a6)		;Set samplestart
-	move.w	d1,AUD0LEN(a6)		;Set samplelength
-.chan2:
-	lea	FC_VOICE_SIZE(a0),a0
-	tst.w	(a0)
-	beq.s	.chan3
-	subq.w	#1,(a0)
-	bne.s	.chan3
-	move.l	a2,AUD1LC(a6)
-	move.w	d2,AUD1LEN(a6)
-.chan3:
-	lea	FC_VOICE_SIZE(a0),a0
-	tst.w	(a0)
-	beq.s	.chan4
-	subq.w	#1,(a0)
-	bne.s	.chan4
-	move.l	a3,AUD2LC(a6)
-	move.w	d3,AUD2LEN(a6)
-.chan4:
-	lea	FC_VOICE_SIZE(a0),a0
-	tst.w	(a0)
-	beq.s	.endplay
-	subq.w	#1,(a0)
-	bne.s	.endplay
-	move.l	a4,AUD3LC(a6)
-	move.w	d4,AUD3LEN(a6)
-.endplay:
+	bne.s	*+22
+
+	move.l	(FC_VOICE_SamplePtr+.voice)(a2),a1 	;Get samplepointer
+	adda.w	(FC_VOICE_RepeatStart+.voice)(a2),a1
+	move.w	(FC_VOICE_RepeatLength+.voice)(a2),d1	;Get repeat_length
+	
+	move.l	a1,(AUD0LC+.audio)(a6)			;Set samplestart
+	move.w	d1,(AUD0LEN+.audio)(a6)			;Set samplelength
+
+.voice	set 	.voice+FC_VOICE_SIZE
+.audio	set	.audio+$10
+
+	
+	ENDR
+
 	rts
 
 ;;; ----------------------------------

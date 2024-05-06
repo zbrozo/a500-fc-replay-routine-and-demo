@@ -4,7 +4,7 @@
 ;;;-------------------------------------------------------------------
 	incdir ZPRJ:fc/
 	section main,code_c
-
+        
 	bra	Main
 
 	include custom.i
@@ -876,11 +876,11 @@ MenuPrevItem:   dc.b    -1              ; previously selected item number
                 
 MenuText:
 	dc.b	"CRACK DOWN BY RAF - SMOD",0
-	dc.b	"MUSIC 2 - FC14",0
-	dc.b	"MUSIC 3 - FC14",0
-	dc.b	"MUSIC 4 - FC14",0
-	dc.b	"MUSIC 5 - FC14",0
-	dc.b	"MUSIC 6 - FC14",0
+	dc.b	"SHAOLIN BY JOCHEN HIPPEL - FC14",0
+	dc.b	"HORIZON BY BLAZER - FC14",0
+	dc.b	"COMPLEX BY WALKMAN",0
+	dc.b	"TRSI2 - FC14",0
+	dc.b	"TRILOGY BY JESPER K. - FC14",0
 	dc.b	"EXIT DEMO",0
 	dc.b	0
 	EVEN
