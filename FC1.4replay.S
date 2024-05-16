@@ -4,7 +4,6 @@
 ** refactored, optimized and fixed, replays also older SMOD format
 ** by Zbrozo aka Bishop/Turnips 2023-2024
 *********************************************************
-;Doesn't work with V1.0 - V1.3 modules !!
 
 ;;	move.l $4,a6		;This little routine
 ;;	jsr -132(a6)		;is only for test purposes
