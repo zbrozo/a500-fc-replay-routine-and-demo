@@ -49,7 +49,7 @@ D_BackgroundColor = $000
 D_SpritePosX = 64
 D_SpriteGapX = 1
 D_SpriteHeight = 64
-D_SpritePosY = $30+(D_SpriteHeight/2)
+D_SpritePosY = $2C+(D_SpriteHeight/2)
 D_SpriteSize = (D_SpriteHeight+2)*4
              
 Main:
@@ -161,7 +161,7 @@ Player:
 	bsr	GetRasterPosition
 	move.w	d0,-(a7)
 
-	move.w	#$0f0,$dff180
+	move.w	#$0ddf,$dff180
 	jsr	PLAY_MUSIC
 	move.w	#D_BackgroundColor,$dff180
 
@@ -261,7 +261,8 @@ InitCopper:
         bsr     InitMenuBars
         bsr     InitMenuColors
         bsr	InitPeriodEqualizerColors
-   
+	bsr	InitChannelEqualizerColors   
+
 	lea	ChannelsEqualizerScreen,a0
 	lea	CopperChannelsEqualizer(pc),a1
 	move.l	a0,d0
@@ -380,12 +381,34 @@ InitMenuColors:
         lea     CopperMenuBars(pc),a0
         moveq   #D_MenuEntries*(D_FontHeight+1)-1,d6
 .l:
-       
-        bsr.s   SetFontColors
+        bsr   	SetFontColors
         addq.w  #4,a0
         dbf     d6,.l
         rts
 
+
+InitChannelEqualizerColors:
+	lea	CopperChannelEqualizerColors(pc),a0
+	lea	Colors2,a1
+	
+	move.l	#$01a20000,d0
+	move.l	#$01aa0000,d2
+	move.l	#$2d07fffe,d1
+	move.w	#64-1,d7
+.loop:
+	move.w	(a1)+,d0
+	move.w	d0,d2
+
+	move.l	d0,(a0)+
+	move.l	d2,(a0)+
+
+	move.l	d1,(a0)+
+	add.l	#$01000000,d1
+	dbf	d7,.loop
+
+	rts
+
+	
 InitPeriodEqualizerColors:
 	lea	CopperPeriodEqualizerColors(pc),a0
 	lea	Colors1,a1
@@ -1038,17 +1061,16 @@ CopperSprites:
 
 	dc.w	$180,0
         
-        ;; sprite colors
-	dc.w	$01a2,$fff
-	dc.w	$01aa,$fff
-        
-	dc.w	$3007,$fffe
+	dc.w	$2c07,$fffe
 CopperChannelsEqualizer:
 	dc.w	$e0,0
 	dc.w	$e2,0
 	dc.w	$100,$1200
-	dc.w	$182,$fff
-        
+CopperChannelEqualizerColors:
+	blk.l	3*64,0
+
+	dc.w	$100,0
+	
 	dc.w	$7007,$fffe
         
 	dc.w	$108,D_ScreenWidthInBytes*(D_ScreenBitplanes-1)
@@ -1182,7 +1204,17 @@ Colors1:
         dc.w    $0df0,$0df0,$0df0,$0cf0,$0cf0,$0cf0,$0cf0,$0bf0
         dc.w    $0cf0,$0cf1,$0cf2,$0cf3,$0df4,$0df5,$0df6,$0df7
         dc.w    $0ef8,$0ef9,$0efa,$0efb,$0ffc,$0ffd,$0ffe,$0fff
-	
+
+Colors2:
+        dc.w    $0fff,$0fff,$0efe,$0efd,$0dfc,$0cfb,$0cfb,$0bfa
+        dc.w    $0af9,$0af8,$09f7,$08f7,$08f6,$07f5,$06f4,$06f3
+        dc.w    $06f3,$07f3,$07f3,$08f3,$09e2,$09e2,$0ae2,$0be2
+        dc.w    $0be1,$0ce1,$0ce1,$0de1,$0ee0,$0ee0,$0fe0,$0fd0
+        dc.w    $0fd0,$0ec1,$0ec2,$0db3,$0cb4,$0ca4,$0ba5,$0b96
+        dc.w    $0a97,$0988,$0989,$0879,$076a,$076b,$065c,$065d
+        dc.w    $065d,$076d,$077d,$087d,$098e,$099e,$0a9e,$0bae
+        dc.w    $0bbe,$0cbe,$0ccf,$0ddf,$0edf,$0eef,$0fff,$0fff
+
 ;;;-------------------------------------------------------------------
 
         section buffers,bss_c
