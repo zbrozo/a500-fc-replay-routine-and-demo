@@ -63,7 +63,7 @@ Main:
 
 	bsr	InitCopper
 	bsr	InitFontPtrs
-        
+
         bsr     PrintMenu
         bsr     PrintReplayTimeMessages
 
@@ -260,7 +260,8 @@ InitCopper:
         bsr     InitMenuBitplanes
         bsr     InitMenuBars
         bsr     InitMenuColors
-        
+        bsr	InitPeriodEqualizerColors
+   
 	lea	ChannelsEqualizerScreen,a0
 	lea	CopperChannelsEqualizer(pc),a1
 	move.l	a0,d0
@@ -274,7 +275,6 @@ InitCopper:
 	move.w	d0,6(a1)
 	swap	d0
 	move.w	d0,2(a1)
-
 	rts
         
 InitMessageBitplanes:   
@@ -386,6 +386,34 @@ InitMenuColors:
         dbf     d6,.l
         rts
 
+InitPeriodEqualizerColors:
+	lea	CopperPeriodEqualizerColors(pc),a0
+	lea	Colors1,a1
+	
+	move.l	#$01820000,d0
+	move.l	#$ed07fffe,d1
+	move.w	#19-1,d7
+.loop1:
+	move.w	(a1)+,d0
+	move.l	d0,(a0)+
+	move.l	d1,(a0)+
+	add.l	#$01000000,d1
+	dbf	d7,.loop1
+
+	move.w	(a1)+,d0
+	move.l	d0,(a0)+
+	move.l	#$ffdffffe,(a0)+
+
+	move.l	#$0107fffe,d1
+	move.w	#$2c-1,d7
+.loop2:
+	move.w	(a1)+,d0
+	move.l	d0,(a0)+
+	move.l	d1,(a0)+
+	add.l	#$01000000,d1
+	dbf	d7,.loop2
+	rts
+	
 ;;; a0 - copper registers array
 SetFontColors:  
         lea     FontColors(pc),a1
@@ -1047,7 +1075,7 @@ CopperMenuBars:
 	*dc.w	D_PlayerWaitRaster*$100+7,$fffe
 	dc.w	$9c,$8010		; int request
 
-	dc.w	$d807,$fffe
+	dc.w	$d407,$fffe
 
         dc.w	$108,D_ScreenWidthInBytes*(D_ScreenBitplanes-1)
 	dc.w	$10a,D_ScreenWidthInBytes*(D_ScreenBitplanes-1)
@@ -1062,7 +1090,7 @@ CopperBitplanes:
 
 	dc.w	$100,BPLCON_COLOR+D_FontBitplanes*$1000
 
-	dc.w	$f007,$fffe
+	dc.w	$ec07,$fffe
 
 	dc.w	$108,0
 	dc.w	$10a,0
@@ -1071,9 +1099,8 @@ CopperPeriodEqualizer:
 	dc.w	$e0,0
 	dc.w	$e2,0
 	dc.w	$100,$1200
-	dc.w	$182,$fff
-	dc.w	$ffdf,$fffe		;allow VPOS>$ff
-	dc.w	$3007,$fffe
+CopperPeriodEqualizerColors:	
+	blk.l	2*64,0
 	dc.w	$100,0
 	dc.w	$ffff,$fffe		;magic value to end copperlist
 
@@ -1132,7 +1159,7 @@ MusicPtrs:
         dc.l    Music4
         dc.l    Music5
         dc.l    Music6
-        
+
 Music1:
 	incbin "modules/crack down.smod"
 Music2:
@@ -1146,6 +1173,16 @@ Music5:
 Music6:
 	incbin "modules/trilogy.fc"
 
+Colors1:
+        dc.w    $00ff,$00ff,$00ef,$00df,$01cf,$01bf,$01bf,$01af
+        dc.w    $029f,$028f,$027f,$027f,$036f,$035f,$034f,$033f
+        dc.w    $044f,$055e,$066d,$066c,$077b,$088a,$0999,$0998
+        dc.w    $0aa7,$0bb6,$0cc5,$0cc4,$0dd3,$0ee2,$0ff1,$0ff0
+        dc.w    $0ff0,$0ff0,$0ff0,$0ef0,$0ef0,$0ef0,$0ef0,$0df0
+        dc.w    $0df0,$0df0,$0df0,$0cf0,$0cf0,$0cf0,$0cf0,$0bf0
+        dc.w    $0cf0,$0cf1,$0cf2,$0cf3,$0df4,$0df5,$0df6,$0df7
+        dc.w    $0ef8,$0ef9,$0efa,$0efb,$0ffc,$0ffd,$0ffe,$0fff
+	
 ;;;-------------------------------------------------------------------
 
         section buffers,bss_c
