@@ -42,7 +42,7 @@ D_EqScreenHeight = 64
 D_EqScreenWidth = 320
 D_EqScreenWidthInBytes = D_EqScreenWidth/8
 D_EqScreenSize = D_EqScreenWidthInBytes*D_EqScreenHeight
-D_EqFreqs = 40
+D_EqPeriods = 40
 
 D_BackgroundColor = $000
 
@@ -110,7 +110,7 @@ Main:
 	bsr	WriteDecValue
 .ok:
         bsr     SpriteEqualizer
-        bsr	FreqsEqualizer
+        bsr	PeriodEqualizer
 
         bsr     MusicSelector
         bsr     MusicMenuItemSelect
@@ -268,8 +268,8 @@ InitCopper:
 	swap	d0
 	move.w	d0,2(a1)
 
-	lea	FreqsEqualizerScreen,a0
-	lea	CopperFreqsEqualizer(pc),a1
+	lea	PeriodEqualizerScreen,a0
+	lea	CopperPeriodEqualizer(pc),a1
 	move.l	a0,d0
 	move.w	d0,6(a1)
 	swap	d0
@@ -506,12 +506,12 @@ SpriteEqualizer:
 .end:   
         rts
 
-FreqsEqualizer:
-	bsr.s	FreqsEqualizerDecrease
+PeriodEqualizer:
+	bsr	PeriodEqualizerDecreaseBars
 
 	lea	FC_VoicesInfo(pc),a0
-	lea	FreqsEqualizerScreen,a1
-	lea	FreqsEqualizerValues(pc),a2
+	lea	PeriodEqualizerScreen,a1
+	lea	PeriodEqualizerValues(pc),a2
 	lea	FC_PlayInfo(pc),a3
 
 	moveq	#FC_CHANNELS-1,d7
@@ -519,40 +519,111 @@ FreqsEqualizer:
 .channel:
 	move.w	FC_PlayInfo_ChannelBitMask(a3),d0
 	btst	d6,d0
-	beq.s	.skip
+	beq.s	.skip_channel
 
 	tst.b	FC_VOICE_Volume(a0)
-	beq.s	.skip
+	beq.s	.skip_channel
 
  	move.w	FC_VOICE_Period(a0),d0
- 	beq.s	.skip
+ 	beq.s	.skip_channel
  	sub.w	#FC_PERIOD_MIN,d0
 
- 	mulu	#D_EqFreqs-1,d0
+ 	mulu	#D_EqPeriods-1,d0
  	divu	#FC_PERIOD_MAX-FC_PERIOD_MIN,d0
 
-	move.b	d4,(a2,d0.w)
+	move.w	d0,d5		; save position
+	move.w	#D_EqScreenHeight/3,d3
+	moveq	#0,d4
+	add.w	d3,d4
+	add.w	d3,d4
+	add.w	d3,d4
+	
+	bsr.s	CalcAndDrawPeriodBar
 
- 	move.w	#D_EqScreenHeight-1,d6
-	move.l	a1,a5
-	adda.w	d0,a5
-	move.b	#$fe,d0
-.draw:
- 	move.b	d0,(a5)
- 	lea	D_EqScreenWidthInBytes(a5),a5
- 	dbf	d6,.draw
-.skip:
+	move.w	#D_EqScreenHeight/2,d4
+	
+	move.w	d5,d0
+	addq.w	#1,d0
+	cmp.w	#D_EqPeriods-1,d0
+	bpl.s	.skip1
+	
+	bsr.s	CalcAndDrawPeriodBar
+.skip1:	
+	move.w	d5,d0
+	subq.w	#1,d0
+	bmi.s	.skip2
+	
+	bsr.s	CalcAndDrawPeriodBar
+.skip2:	
+	
+.skip_channel:
 	lea	FC_VOICE_SIZE(a0),a0
 	addq.b	#1,d6
 	dbf	d7,.channel
 	rts
 
-FreqsEqualizerDecrease:
-	lea	FreqsEqualizerScreen,a1
-	lea	FreqsEqualizerValues(pc),a2
+;;; d0 - position 
+;;; d4 - initial height
+CalcAndDrawPeriodBar:	
+	move.l	a1,a5
+	adda.w	d0,a5
+
+	move.b	(a2,d0.w),d1
+	bne.s	.calc_new_height
+.init:	
+	move.b	d4,(a2,d0.w)
+
+	move.w	#D_EqScreenHeight,d0
+	sub.w	d4,d0
+	mulu	#D_EqScreenWidthInBytes,d0
+	adda.w	d0,a5
+
+ 	move.w	d4,d6
+	subq.w	#1,d6
+
+.draw:
+ 	move.b	#$fe,(a5)
+ 	lea	D_EqScreenWidthInBytes(a5),a5
+ 	dbf	d6,.draw
+.quit:	
+	rts
+
+.calc_new_height:
+	
+	move.b	d1,d2
+	add.b	#10,d1
+
+	cmp.b	d4,d1
+	blt.s	.init
+
+	cmp.b	#D_EqScreenHeight,d1
+	ble.s	.ok
+
+	move.b	#D_EqScreenHeight,d1
+	
+.ok:	
+	move.b	d1,(a2,d0.w)
+
+	moveq	#0,d0
+	move.b	#D_EqScreenHeight,d0
+	sub.b	d1,d0
+	mulu	#D_EqScreenWidthInBytes,d0
+	adda.w	d0,a5
+
+	moveq	#0,d6
+	move.b	d1,d6
+	sub.b	d2,d6
+	beq.s	.quit
+	
+	subq.w	#1,d6
+	bra.s	.draw
+	
+PeriodEqualizerDecreaseBars:
+	lea	PeriodEqualizerScreen,a1
+	lea	PeriodEqualizerValues(pc),a2
 	move.w	#D_EqScreenHeight,d4
 	moveq	#0,d5
-	moveq	#D_EqFreqs-1,d7
+	moveq	#D_EqPeriods-1,d7
 .loop:
 	moveq	#0,d0
 	move.b	(a2),d0
@@ -996,7 +1067,7 @@ CopperBitplanes:
 	dc.w	$108,0
 	dc.w	$10a,0
 
-CopperFreqsEqualizer:
+CopperPeriodEqualizer:
 	dc.w	$e0,0
 	dc.w	$e2,0
 	dc.w	$100,$1200
@@ -1045,8 +1116,8 @@ NullSprite:
 ;;;-------------------------------------------------------------------
 ChannelsEqualizerValues:
 	dc.b	0,0,0,0
-FreqsEqualizerValues:
-	blk.b	D_EqFreqs,0
+PeriodEqualizerValues:
+	blk.b	D_EqPeriods,0
 
 Font:
 	incbin	font1x1x3.rawblit
@@ -1065,15 +1136,15 @@ MusicPtrs:
 Music1:
 	incbin "modules/crack down.smod"
 Music2:
-	incbin modules/shaolin.fc
+	incbin "modules/shaolin.fc"
 Music3:
-	incbin modules/horizon.fc
+	incbin "modules/horizon.fc"
 Music4:
-	incbin modules/complex.fc
+	incbin "modules/complex.fc"
 Music5:
-	incbin modules/trsi2.fc
+	incbin "modules/trsi2.fc"
 Music6:
-	incbin modules/trilogy.fc
+	incbin "modules/trilogy.fc"
 
 ;;;-------------------------------------------------------------------
 
@@ -1085,7 +1156,7 @@ MessageScreen:
 	ds.b	D_MessageScreenSize
 ChannelsEqualizerScreen:
 	ds.b	D_EqScreenSize
-FreqsEqualizerScreen:
+PeriodEqualizerScreen:
 	ds.b	D_EqScreenSize
 MenuScreen:
         ds.b    D_MenuScreenSize
